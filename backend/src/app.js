@@ -13,6 +13,10 @@ import recordRoutes from './modules/records/record.routes.js';
 import viewRoutes from './modules/views/view.routes.js';
 import reportRoutes, { analyzeRouter } from './modules/analytics/analytics.routes.js';
 import dashboardRoutes from './modules/analytics/dashboard.routes.js';
+import commentRoutes, { recordCommentRouter } from './modules/comments/comment.routes.js';
+import taskRoutes from './modules/tasks/task.routes.js';
+import notificationRoutes from './modules/notifications/notification.routes.js';
+import attachmentRoutes, { recordAttachmentRouter } from './modules/attachments/attachment.routes.js';
 import workspaceRoutes from './modules/workspaces/workspace.routes.js';
 
 export function createApp() {
@@ -34,12 +38,18 @@ export function createApp() {
   app.use('/api/v1/accounts', accountRoutes);
   app.use('/api/v1/users', userRoutes);
   app.use('/api/v1/workspaces', workspaceRoutes);
+  app.use('/api/v1/dataforms/:id/records/:recordId', recordCommentRouter);
+  app.use('/api/v1/dataforms/:id/records/:recordId', recordAttachmentRouter);
   app.use('/api/v1/dataforms/:id/records', recordRoutes);
   app.use('/api/v1/dataforms/:id/views', viewRoutes);
   app.use('/api/v1/dataforms/:id/analyze', analyzeRouter);
   app.use('/api/v1/dataforms', dataformRoutes);
   app.use('/api/v1/reports', reportRoutes);
   app.use('/api/v1/dashboards', dashboardRoutes);
+  app.use('/api/v1/comments', commentRoutes);
+  app.use('/api/v1/tasks', taskRoutes);
+  app.use('/api/v1/notifications', notificationRoutes);
+  app.use('/api/v1/attachments', attachmentRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

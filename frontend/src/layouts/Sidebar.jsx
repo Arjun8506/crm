@@ -19,6 +19,8 @@ import { useListDataformsQuery } from '../features/dataforms/dataformsApi';
 import TableIcon from '@mui/icons-material/TableRowsOutlined';
 import DashboardIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import ReportIcon from '@mui/icons-material/QueryStatsRounded';
+import TaskIcon from '@mui/icons-material/TaskAltRounded';
+import BellIcon from '@mui/icons-material/NotificationsNoneRounded';
 
 function NavItem({ to, icon, label, collapsed, end, onClick }) {
   const item = (
@@ -55,9 +57,12 @@ function SidebarContent({ collapsed, onNavigate }) {
         <NavItem to="/workspaces" icon={<WorkspacesIcon />} label="All workspaces" collapsed={collapsed} onClick={onNavigate} />
         {current && <NavItem to={`/w/${current._id}`} icon={<HomeIcon />} label={current.name} collapsed={collapsed} end onClick={onNavigate} />}
         {current && dataforms.map((d) => <NavItem key={d._id} to={`/w/${current._id}/f/${d._id}`} icon={<TableIcon />} label={d.name} collapsed={collapsed} onClick={onNavigate} />)}
+        {current && <NavItem to={`/w/${current._id}/tasks`} icon={<TaskIcon />} label="Workspace tasks" collapsed={collapsed} onClick={onNavigate} />}
         {current && <NavItem to={`/w/${current._id}/reports`} icon={<ReportIcon />} label="Reports & analysis" collapsed={collapsed} onClick={onNavigate} />}
         <Divider sx={{ my: 1.5 }} />
         {!collapsed && <ListSubheader disableSticky sx={{ bgcolor: 'transparent', lineHeight: '28px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Insights</ListSubheader>}
+        <NavItem to="/tasks" icon={<TaskIcon />} label="My tasks" collapsed={collapsed} onClick={onNavigate} />
+        <NavItem to="/notifications" icon={<BellIcon />} label="Notifications" collapsed={collapsed} onClick={onNavigate} />
         <NavItem to="/dashboards" icon={<DashboardIcon />} label="Dashboards" collapsed={collapsed} onClick={onNavigate} />
         <Divider sx={{ my: 1.5 }} />
         {!collapsed && <ListSubheader disableSticky sx={{ bgcolor: 'transparent', lineHeight: '28px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Administration</ListSubheader>}

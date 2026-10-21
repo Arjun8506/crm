@@ -1,9 +1,29 @@
 import { can } from '../../config/permissions.js';
 import { forbidden, notFound } from '../../utils/errors.js';
+import { Membership } from '../users/membership.model.js';
 import { Workspace } from './workspace.model.js';
 
 export const LEVEL = { viewer: 1, editor: 2, admin: 3 };
 const WS_ROLE_LEVEL = { viewer: 1, editor: 2, admin: 3 };
+
+// Of the given user ids, returns those who may open the workspace (active account member, and for private
+// workspaces a listed member or an account admin). Used to validate mentions and task assignees.
+export async function usersWithAccess(workspace, userIds) {
+  const unique = [...new Set(userIds.map(String))].filter((id) => /^[a-f\d]{24}$/i.test(id));
+  if (unique.length === 0) return [];
+  const memberships = await Membership.find({ account: workspace.account, user: { $in: unique }, status: 'active' }).lean();
+  const listed = new Set(workspace.members.map((m) => String(m.user)));
+  return memberships
+    .filter((m) => workspace.visibility !== 'private' || listed.has(String(m.user)) || can(m.role, 'workspace:admin'))
+    .map((m) => String(m.user));
+}
+
+// Ids of every workspace in the caller's account that they may open (used for cross-workspace lists like My Tasks).
+export async function accessibleWorkspaceIds(auth) {
+  const filter = { account: auth.accountId };
+  if (!can(auth.role, 'workspace:admin')) filter.$or = [{ visibility: 'account' }, { 'members.user': auth.userId }];
+  return (await Workspace.find(filter).select('_id').lean()).map((w) => w._id);
+}
 
 // Resolves the caller's effective level in a workspace (viewer < editor < admin).
 // Unknown / invisible workspaces are reported as 404 so IDs cannot be probed across tenants.

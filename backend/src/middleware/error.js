@@ -14,6 +14,8 @@ export const errorHandler = (err, req, res, _next) => {
     details = Object.keys(err.keyPattern || {});
   } else if (err.name === 'CastError') {
     status = 400; code = 'BAD_REQUEST'; message = 'Invalid identifier';
+  } else if (err.name === 'MulterError') {
+    status = 400; code = 'BAD_REQUEST'; message = 'Invalid upload';
   } else if (err.type === 'entity.parse.failed') {
     status = 400; code = 'BAD_REQUEST'; message = 'Malformed JSON body';
   }

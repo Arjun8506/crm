@@ -5,7 +5,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useMatch, useNavigate } from 'react-router-dom';
 import MenuIcon from '@mui/icons-material/MenuRounded';
 import SearchIcon from '@mui/icons-material/SearchRounded';
-import NotificationsIcon from '@mui/icons-material/NotificationsNoneRounded';
 import HelpIcon from '@mui/icons-material/HelpOutlineRounded';
 import LightIcon from '@mui/icons-material/LightModeOutlined';
 import DarkIcon from '@mui/icons-material/DarkModeOutlined';
@@ -15,6 +14,7 @@ import PersonIcon from '@mui/icons-material/PersonOutlineRounded';
 import { setMobileNav, setThemeMode, showToast } from '../features/ui/uiSlice';
 import { useLogoutMutation } from '../features/auth/authApi';
 import { useListWorkspacesQuery } from '../features/workspaces/workspacesApi';
+import NotificationBell from '../features/notifications/NotificationBell';
 
 const MODES = [
   { value: 'light', label: 'Light', icon: <LightIcon fontSize="small" /> },
@@ -69,7 +69,7 @@ export default function Topbar() {
         <Box sx={{ flex: 1 }} />
         <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
           <Tooltip title="Theme"><IconButton onClick={(e) => setThemeAnchor(e.currentTarget)} aria-label="Change theme">{current.icon}</IconButton></Tooltip>
-          <Tooltip title="Notifications"><IconButton onClick={soon('Notifications')} aria-label="Notifications"><NotificationsIcon /></IconButton></Tooltip>
+          <NotificationBell />
           {isDesktop && <Tooltip title="Help"><IconButton onClick={soon('The help centre')} aria-label="Help"><HelpIcon /></IconButton></Tooltip>}
           <IconButton onClick={(e) => setMenuAnchor(e.currentTarget)} aria-label="Account menu" sx={{ ml: 0.5 }}>
             <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: 14 }}>{user?.name?.[0]?.toUpperCase()}</Avatar>

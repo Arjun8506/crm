@@ -8,6 +8,11 @@ const schema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),
   ACCESS_TOKEN_TTL_MIN: z.coerce.number().int().positive().default(15),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  // Optional. Without SMTP_URL no email is sent and the UI says so; nothing is ever faked.
+  SMTP_URL: z.string().optional(),
+  EMAIL_FROM: z.string().default('OrgCRM <no-reply@localhost>'),
+  APP_URL: z.string().default('http://localhost:5173'),
+  STORAGE_DIR: z.string().default('./storage'),
 });
 
 const parsed = schema.safeParse(process.env);

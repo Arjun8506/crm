@@ -6,6 +6,7 @@ import { badRequest, conflict, notFound } from '../../utils/errors.js';
 import { workspaceAccess } from '../workspaces/access.js';
 import { RecordHistory, RecordModel } from '../records/record.model.js';
 import { Dataform, FieldDefinition } from './dataform.model.js';
+import { purgeDataformArtifacts } from '../records/cleanup.js';
 import { TYPE_NAMES, operatorsFor } from './fieldTypes.js';
 import { TEMPLATES } from './templates.js';
 import { addField, assertUniqueSafe, loadDataform, normalizeField, uniqueDataformSlug } from './dataform.service.js';
@@ -125,6 +126,7 @@ router.delete('/:id', validate({ params: idParams }), async (req, res) => {
   const { dataform } = await loadDataform(req, 'admin');
   const referrer = await FieldDefinition.findOne({ account: dataform.account, 'config.targetDataform': dataform._id, dataform: { $ne: dataform._id } }).lean();
   if (referrer) throw conflict('Another dataform has a relationship field pointing here. Remove that field first.');
+  await purgeDataformArtifacts(dataform.account, dataform._id);
   await Promise.all([
     RecordModel.deleteMany({ account: dataform.account, dataform: dataform._id }),
     RecordHistory.deleteMany({ account: dataform.account, dataform: dataform._id }),

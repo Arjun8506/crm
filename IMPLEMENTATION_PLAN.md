@@ -85,8 +85,35 @@ Two independent projects: `frontend/` (Vite React SPA) and `backend/` (Express A
 - Map: no clustering for very large sets (capped at 200 markers per view), tiles come from the public OpenStreetMap server
 - Calendar: month view only, no create-by-click or drag to reschedule
 
+## Phase 4: Collaboration (DONE)
+- [x] Comments on records and tasks, one level of replies, edit/delete (author or workspace admin), @mentions that are re-validated server-side (a mention can never reveal a record to someone without access)
+- [x] Following: manual follow/unfollow plus auto-follow when you create a record, comment, are mentioned or upload a file; followers are notified of comments, updates and files
+- [x] Tasks and reminders: multiple assignees, due date, reminder time, priority, status, optional link to a record, activity history, task comments, My Tasks (overdue / today / upcoming / no date / done) and per-workspace task views
+- [x] Scheduler: reminder, due-within-24h and overdue notifications, claimed atomically so each fires once even with several API instances
+- [x] Notifications: in-app centre with unread badge, per-type in-app and email preferences, desktop (browser) notifications when the tab is in the background
+- [x] Email via a provider adapter (nodemailer/SMTP). Sent only when configured and opted in; never faked
+- [x] Attachments: upload (drag and drop), authenticated thumbnails and downloads, descriptions, delete, ZIP of all files, plan-based size limit, file-signature check before inline preview, dangerous types refused; bytes removed when a record, dataform or workspace is deleted
+- [x] Real-time: Socket.IO with token auth and server-checked workspace rooms; live comments, tasks, files, record changes and notifications. If someone else saves the record you are editing, your unsaved edits are kept and a banner offers "Load latest"
+- [x] Fixed a gap from earlier phases: deleting a workspace now deletes its dataforms, records, files, reports and tasks instead of orphaning them
+- [x] Seed: demo comments (with a reply and mentions), follows, 6 tasks across overdue/today/upcoming/no date/done, and notifications
+- [x] Tests: 69 backend tests (25 new). Verified in Chrome via Playwright with two simultaneous users: deep-linked notifications, mention highlighting, file upload/thumbnail/download/delete, tasks, live comment delivery, live bell update, saved preferences, with zero console errors
+
+### Decisions
+- Socket events carry ids only, and the client refetches through the REST API. Every read is therefore authorized by the same code as before, and nothing sensitive can leak through a room.
+- Reminders run in an in-process scheduler with atomic claims. It becomes a BullMQ repeatable job in Phase 5 without changing the function.
+- File bytes go through a small storage adapter (local disk now). An S3-compatible driver would implement the same three methods and add presigned URLs.
+- Notification preferences are stored per type and channel on the user; in-app defaults on, email defaults off.
+
+### Not done in Phase 4 (honest list)
+- Audio comments (the spec's optional audio attachments), comment attachments, and a "My Discussions" feed or dashboard widget; My Tasks dashboard widget and reminders widget
+- S3-compatible storage and presigned URLs (local disk only), per-field file/image field types, attachment history, virus scanning, per-account storage usage reporting
+- Real mobile push (FCM/APNS) and Web Push (VAPID): device tokens can be registered but nothing is sent. Desktop notifications work only while the app is open in a browser tab
+- Email digests and email reply-to-comment; email requires an administrator to set `SMTP_URL`
+- Recurring tasks, subtasks, task boards, assigning tasks to roles or teams, @mentioning groups
+- A socket stays authorized until it disconnects (a removed member keeps an open connection until they reconnect), though they can no longer read anything because data still flows through the REST API
+- Comment editing history, rich text/markdown in comments, and read receipts
+
 ## Next phases
-4. Collaboration: comments, tasks, notifications, attachments, Socket.IO.
 5. Workflows and communication adapters.
 6. API docs (OpenAPI), webhooks, CSV import/export, public forms/shares.
 7. AI provider abstraction, billing, onboarding.

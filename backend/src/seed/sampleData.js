@@ -4,6 +4,9 @@ import { TEMPLATES } from '../modules/dataforms/templates.js';
 import { RecordModel } from '../modules/records/record.model.js';
 import { slugify } from '../utils/slug.js';
 import { View } from '../modules/views/view.model.js';
+import { Comment, Follow } from '../modules/comments/comment.model.js';
+import { Notification } from '../modules/notifications/notification.model.js';
+import { Task, TaskActivity } from '../modules/tasks/task.model.js';
 import { Dashboard, Report } from '../modules/analytics/report.model.js';
 
 // Deterministic pseudo-random so every seed produces the same demo data.
@@ -39,7 +42,7 @@ async function makeForm(account, workspace, owner, templateId) {
   return dataform;
 }
 
-export async function seedSampleData(account, workspaces, owner) {
+export async function seedSampleData(account, workspaces, owner, users = {}) {
   const sales = workspaces.find((w) => w.name === 'Sales Pipeline');
   const support = workspaces.find((w) => w.name === 'Customer Support');
   const base = { account: account._id, createdBy: owner._id, updatedBy: owner._id };
@@ -119,6 +122,8 @@ export async function seedSampleData(account, workspaces, owner) {
     ],
   });
 
+  await seedCollaboration({ account, sales, owner, users, deals, contacts });
+
   const tickets = await makeForm(account, support, owner, 'tickets');
   const subjects = ['Cannot log in', 'Invoice discrepancy', 'Feature request: export', 'Slow dashboard', 'Password reset loop', 'Data import failed'];
   await RecordModel.insertMany(Array.from({ length: 18 }, (_, i) => ({
@@ -130,4 +135,51 @@ export async function seedSampleData(account, workspaces, owner) {
   })));
 }
 
-export const clearSampleData = () => Promise.all([Dataform.deleteMany({}), FieldDefinition.deleteMany({}), RecordModel.deleteMany({}), View.deleteMany({}), Report.deleteMany({}), Dashboard.deleteMany({})]);
+export const clearSampleData = () => Promise.all([Comment.deleteMany({}), Follow.deleteMany({}), Task.deleteMany({}), TaskActivity.deleteMany({}), Notification.deleteMany({}), Dataform.deleteMany({}), FieldDefinition.deleteMany({}), RecordModel.deleteMany({}), View.deleteMany({}), Report.deleteMany({}), Dashboard.deleteMany({})]);
+
+// Comments, tasks and notifications so the collaboration UI has something to show. Dates are relative to "now".
+async function seedCollaboration({ account, sales, owner, users, deals, contacts }) {
+  const person = (email) => users[email] ?? owner;
+  const alex = owner; const priya = person('admin@acme.test'); const jordan = person('member@acme.test'); const taylor = person('taylor@acme.test');
+  const now = Date.now();
+  const inDays = (d, hour = 17) => { const x = new Date(now + d * 864e5); x.setUTCHours(hour, 0, 0, 0); return x; };
+
+  const dealRecs = await RecordModel.find({ account: account._id, dataform: deals._id }).sort({ rank: 1 }).limit(3).lean();
+  const contactRecs = await RecordModel.find({ account: account._id, dataform: contacts._id }).sort({ rank: 1 }).limit(2).lean();
+  const target = (df, r) => ({ account: account._id, workspace: sales._id, dataform: df._id, record: r._id });
+
+  const root1 = await Comment.create({ ...target(deals, dealRecs[0]), author: jordan._id, body: 'Customer asked for revised pricing before Friday. Can finance sign off on a 10% discount?', mentions: [priya._id], createdAt: inDays(-2, 9) });
+  await Comment.create({ ...target(deals, dealRecs[0]), author: priya._id, parent: root1._id, body: 'Approved up to 8%. Anything beyond that needs Alex.', mentions: [], createdAt: inDays(-2, 11) });
+  await Comment.create({ ...target(deals, dealRecs[0]), author: alex._id, parent: root1._id, body: 'Fine by me. Please send the updated quote today.', mentions: [jordan._id], createdAt: inDays(-1, 8) });
+  await Comment.create({ ...target(deals, dealRecs[1]), author: taylor._id, body: 'Legal flagged one clause in the draft contract. I will follow up on Monday.', mentions: [], createdAt: inDays(-1, 14) });
+  await Comment.create({ ...target(contacts, contactRecs[0]), author: alex._id, body: 'Met at the trade show: very interested in the annual plan. @Taylor can you take this one?', mentions: [taylor._id], createdAt: inDays(-3, 10) });
+
+  const follow = (df, r, ...us) => Follow.insertMany(us.map((u) => ({ ...target(df, r), user: u._id, reason: 'auto' })));
+  await follow(deals, dealRecs[0], jordan, priya, alex);
+  await follow(deals, dealRecs[1], taylor, alex);
+  await follow(contacts, contactRecs[0], alex, taylor);
+
+  const task = (title, who, due, extra = {}) => Task.create({
+    account: account._id, workspace: sales._id, title, assignees: who.map((u) => u._id), createdBy: alex._id, due, ...extra,
+  });
+  const tasks = [
+    await task('Send revised quote to customer', [jordan], inDays(-1), { priority: 'urgent', dataform: deals._id, record: dealRecs[0]._id, description: 'Include the approved 8% discount and updated payment terms.' }),
+    await task('Review legal comments on contract', [taylor, jordan], inDays(0, 23), { priority: 'high', status: 'in_progress', dataform: deals._id, record: dealRecs[1]._id }),
+    await task('Follow up with trade-show lead', [taylor], inDays(2), { dataform: contacts._id, record: contactRecs[0]._id, reminderAt: inDays(1, 9) }),
+    await task('Prepare Q4 pipeline review', [jordan, priya], inDays(6), { priority: 'normal' }),
+    await task('Update CRM data quality checklist', [jordan], undefined, { priority: 'low' }),
+    await task('Onboard new account executive', [priya], inDays(-4), { status: 'done', completedAt: inDays(-3) }),
+  ];
+  await TaskActivity.insertMany(tasks.map((t) => ({ account: account._id, task: t._id, user: alex._id, action: 'create', at: inDays(-5) })));
+  await Comment.create({ account: account._id, workspace: sales._id, task: tasks[0]._id, author: priya._id, body: 'Quote template is in the shared drive. Use the 2026 version.', mentions: [], createdAt: inDays(-1, 15) });
+
+  const note = (user, type, title, body, link, ago) => ({ account: account._id, user: user._id, actor: alex._id, type, title, body, link, createdAt: new Date(now - ago * 36e5) });
+  await Notification.insertMany([
+    note(jordan, 'task_assigned', 'You were assigned: Send revised quote to customer', 'Due yesterday', `/tasks?task=${tasks[0]._id}`, 30),
+    note(jordan, 'mention', 'Alex Morgan mentioned you on a deal', 'Fine by me. Please send the updated quote today.', `/w/${sales._id}/f/${deals._id}?record=${dealRecs[0]._id}`, 20),
+    note(jordan, 'task_overdue', 'Overdue: Send revised quote to customer', '', `/tasks?task=${tasks[0]._id}`, 2),
+    note(taylor, 'mention', 'Alex Morgan mentioned you on a contact', 'Met at the trade show: very interested in the annual plan.', `/w/${sales._id}/f/${contacts._id}?record=${contactRecs[0]._id}`, 72),
+    note(priya, 'comment', 'Jordan Lee commented on a deal', 'Customer asked for revised pricing before Friday.', `/w/${sales._id}/f/${deals._id}?record=${dealRecs[0]._id}`, 50),
+  ]);
+
+}

@@ -22,7 +22,7 @@ router.patch(
     const $set = {};
     if (req.body.name) $set.name = req.body.name;
     if (req.body.preferences?.theme) $set['preferences.theme'] = req.body.preferences.theme;
-    const user = await User.findByIdAndUpdate(req.auth.userId, { $set }, { new: true });
+    const user = await User.findByIdAndUpdate(req.auth.userId, { $set }, { returnDocument: 'after' });
     res.json({ user });
   },
 );

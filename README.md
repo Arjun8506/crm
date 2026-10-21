@@ -2,12 +2,12 @@
 
 A multi-tenant CRM platform on the MERN stack. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the roadmap, architecture decisions and what is and is not built.
 
-**Status: Phases 1-3 complete.** Foundation (auth, accounts, workspaces, roles, MUI shell, themes), the dynamic data platform (dataforms, custom fields, records, relationships, search/sort/filter, bulk actions, history) and advanced views and analytics (table, cards, Kanban, calendar and map views, saved views, reports, grouped table analyzer, dashboards, CSV export). Collaboration, workflows, imports etc. are later phases.
+**Status: Phases 1-4 complete.** Foundation (auth, accounts, workspaces, roles, MUI shell, themes), the dynamic data platform (dataforms, custom fields, records, relationships, search/sort/filter, bulk actions, history) and advanced views and analytics (table, cards, Kanban, calendar and map views, saved views, reports, grouped table analyzer, dashboards, CSV export). Phase 4 adds collaboration: comments with @mentions and following, tasks and reminders, notifications, file attachments and live updates. Workflows, imports, integrations etc. are later phases.
 
 ## Layout
 Two independent projects with their own `package.json` and `node_modules`. There is no root package.json.
 
-- `backend/`: Node, Express 5, MongoDB + Mongoose, JWT access token + rotating httpOnly refresh cookie, Zod validation, Helmet, rate limiting
+- `backend/`: Node, Express 5, MongoDB + Mongoose, Socket.IO, JWT access token + rotating httpOnly refresh cookie, Zod validation, Helmet, rate limiting
 - `frontend/`: React 19, Vite, MUI, Redux Toolkit + RTK Query, React Router, React Hook Form + Zod, Framer Motion, Day.js
 
 ## Run locally
@@ -75,6 +75,16 @@ Base path `/api/v1`. Errors use `{ "error": { "code", "message", "details?" } }`
 | `GET, POST /reports?workspaceId=`; `GET, PATCH, DELETE /reports/:id` | Saved list reports and analyzer configurations |
 | `GET, POST /dashboards`; `GET, PUT, DELETE /dashboards/:id`; `POST /dashboards/:id/widgets/:widgetId/data` | Account and personal dashboards; widget data is computed per viewer |
 
+| `GET, POST /dataforms/:id/records/:recordId/comments`; `PATCH, DELETE /comments/:id` | Threaded record comments (one level of replies) with `mentions: [userId]` |
+| `PUT, DELETE /dataforms/:id/records/:recordId/follow` | Follow / unfollow a record's discussion |
+| `GET, POST /tasks`; `GET, PATCH, DELETE /tasks/:id`; `GET, POST /tasks/:id/comments` | Tasks (`scope=mine` or `workspace`, due-date range, `status=open`, `done` or `all`), activity history and task comments |
+| `GET /notifications`; `POST /notifications/:id/read`, `/read-all`; `DELETE /notifications/:id` | Notification centre |
+| `GET, PUT /notifications/preferences`; `POST, DELETE /notifications/push/devices` | Per-type in-app / email preferences; push device registration (integration point only) |
+| `GET, POST /dataforms/:id/records/:recordId/attachments`; `POST .../attachments/zip` | List, upload (multipart field `file`), bulk ZIP download |
+| `GET /attachments/:id/download` (add `?inline=1` for images); `PATCH, DELETE /attachments/:id` | Authorized download (inline only for verified images), description, delete |
+
+**Real-time (Socket.IO, same origin as the API).** Connect with `{ auth: { token: <access token> } }`, then `emit('subscribe', { workspaceId }, ack)` for each workspace; the server only joins rooms you may open. Events carry ids only (`record.changed`, `comment.changed`, `task.changed`, `attachment.changed`, `notification.new`): refetch through the REST API.
+
 **Filter format** (validated and compiled server-side; unknown fields/operators are rejected):
 ```json
 { "op": "and", "conditions": [
@@ -90,6 +100,9 @@ Access levels per workspace: viewer (read), editor (records), admin (dataform st
 - All tenant-owned queries are filtered by `account`. Cross-tenant IDs return 404. Covered by tests.
 - Request bodies are Zod-validated and stripped of unknown keys (no mass assignment); non-string values are rejected (NoSQL operator injection).
 - The access token is kept in memory only. The refresh token is an httpOnly, SameSite cookie, stored hashed server-side, single-use (rotated), and only accepted with a custom header.
+- Uploaded files are stored outside the database under `STORAGE_DIR` with server-generated keys (there is no public URL). Downloads go through an authorized endpoint, are forced to `attachment` with `nosniff`, and only genuine png/jpeg/gif/webp (checked by file signature, not the declared type) can be shown inline. Executable file types are refused and the per-file limit comes from the plan (25 MB default).
+- Socket rooms are joined only after a server-side access check, and events never contain record content.
+- Email is sent only if `SMTP_URL` is configured **and** the user opted in. Otherwise nothing is sent and the UI says so; failures are logged and never block the request.
 - `backend/.env` is git-ignored. Never commit database credentials.
 
 ## Known limitations

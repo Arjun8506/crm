@@ -9,6 +9,8 @@ const userSchema = new mongoose.Schema(
     defaultAccount: { type: mongoose.Schema.Types.ObjectId, ref: 'Account' },
     preferences: {
       theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
+      // { inApp: { <type>: bool }, email: { <type>: bool } }. In-app defaults to on, email to off.
+      notifications: { type: mongoose.Schema.Types.Mixed, default: {} },
     },
     lastLoginAt: Date,
   },

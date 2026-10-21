@@ -6,6 +6,7 @@ import { can } from '../../config/permissions.js';
 import { conflict, forbidden, notFound } from '../../utils/errors.js';
 import { slugify } from '../../utils/slug.js';
 import { Account } from '../accounts/account.model.js';
+import { purgeWorkspace } from '../records/cleanup.js';
 import { Workspace } from './workspace.model.js';
 
 const router = Router();
@@ -112,6 +113,7 @@ router.post('/:id/clone', requirePermission('workspace:create'), validate({ para
 
 router.delete('/:id', requirePermission('workspace:read'), validate({ params: idParams }), async (req, res) => {
   const ws = await loadWorkspace(req, { write: true });
+  await purgeWorkspace(ws.account, ws._id);
   await ws.deleteOne();
   res.status(204).end();
 });

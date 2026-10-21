@@ -10,6 +10,7 @@ import { selectCan } from '../auth/authSlice';
 import { useUpdateProfileMutation } from '../auth/authApi';
 import { useGetAccountQuery, useUpdateAccountMutation } from '../accounts/accountApi';
 import { setThemeMode, showToast } from '../ui/uiSlice';
+import NotificationPreferences from '../notifications/NotificationPreferences';
 
 const accountSchema = z.object({
   name: z.string().trim().min(2, 'At least 2 characters'),
@@ -116,6 +117,7 @@ export function ProfilePage() {
             <ToggleButton value="system">System</ToggleButton>
           </ToggleButtonGroup>
         </Card>
+        <Box sx={{ gridColumn: { md: '1 / -1' } }}><NotificationPreferences /></Box>
       </Box>
     </PageTransition>
   );

@@ -37,7 +37,7 @@ router.patch(
     const $set = {};
     if (name) $set.name = name;
     for (const [k, v] of Object.entries(settings || {})) $set[`settings.${k}`] = v;
-    const account = await Account.findByIdAndUpdate(req.auth.accountId, { $set }, { new: true, runValidators: true }).lean();
+    const account = await Account.findByIdAndUpdate(req.auth.accountId, { $set }, { returnDocument: 'after', runValidators: true }).lean();
     res.json({ account });
   },
 );

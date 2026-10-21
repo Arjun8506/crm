@@ -5,6 +5,11 @@ import { objectId, validate } from '../../middleware/validate.js';
 import { badRequest, conflict, notFound } from '../../utils/errors.js';
 import { ValueError, parseValue } from '../dataforms/fieldTypes.js';
 import { toCsv } from './csv.js';
+import { emitWorkspace } from '../../sockets/index.js';
+import { autoFollow, followersOf } from '../comments/comment.service.js';
+import { notify } from '../notifications/notification.service.js';
+import { User } from '../users/user.model.js';
+import { purgeRecords } from './cleanup.js';
 import { FieldDefinition } from '../dataforms/dataform.model.js';
 import { loadDataform } from '../dataforms/dataform.service.js';
 import { RecordHistory, RecordModel } from './record.model.js';
@@ -19,6 +24,9 @@ const idParams = z.object({ id: objectId });
 const recordParams = z.object({ id: objectId, recordId: objectId });
 const dataBody = z.object({ data: z.record(z.string(), z.unknown()) });
 const MAX_BULK = 200;
+
+// Live updates carry ids only; clients refetch through the authorized API.
+const changed = (dataform, recordId, action) => emitWorkspace(dataform.workspace, 'record.changed', { dataformId: String(dataform._id), recordId: recordId ? String(recordId) : undefined, action });
 
 const writable = async (req) => {
   const ctx = await loadDataform(req, 'editor');
@@ -66,7 +74,7 @@ router.post(
 );
 
 router.post('/', validate({ params: idParams, body: dataBody }), async (req, res) => {
-  const { dataform } = await writable(req);
+  const { dataform, access } = await writable(req);
   const fields = await loadFields(dataform._id);
   const data = buildData(fields, req.body.data, 'create');
   await checkReferences(req.auth, dataform, fields, data);
@@ -74,6 +82,8 @@ router.post('/', validate({ params: idParams, body: dataBody }), async (req, res
     account: dataform.account, workspace: dataform.workspace, dataform: dataform._id, data, createdBy: req.auth.userId, updatedBy: req.auth.userId,
   });
   await writeHistory([{ account: dataform.account, dataform: dataform._id, record: record._id, action: 'create', user: req.auth.userId, changes: diff({}, data) }]);
+  await autoFollow({ workspace: access.workspace, dataform: dataform._id, record: record._id, userIds: [req.auth.userId] });
+  changed(dataform, record._id, 'create');
   res.status(201).json({ record, refs: await resolveRefs(req.auth, dataform, fields, [record]) });
 });
 
@@ -128,6 +138,7 @@ router.post(
     record.updatedBy = req.auth.userId;
     await record.save();
     await writeHistory(changes.length ? [{ account: dataform.account, dataform: dataform._id, record: record._id, action: 'update', user: req.auth.userId, changes }] : []);
+    changed(dataform, record._id, 'update');
     res.json({ record });
   },
 );
@@ -148,6 +159,8 @@ router.post('/bulk', validate({
     const found = records.map((r) => r._id);
     await RecordModel.deleteMany({ _id: { $in: found }, account: dataform.account });
     await clearReferences(dataform, found);
+    await purgeRecords(dataform.account, found);
+    changed(dataform, undefined, 'bulk');
     await writeHistory(found.map((record) => ({ account: dataform.account, dataform: dataform._id, record, action: 'delete', user: req.auth.userId })));
     return res.json({ affected: found.length });
   }
@@ -163,6 +176,7 @@ router.post('/bulk', validate({
   })).filter((h) => h.changes.length));
   const $set = { updatedBy: req.auth.userId, ...Object.fromEntries(Object.entries(patch).map(([k, v]) => [`data.${k}`, v])) };
   await RecordModel.updateMany({ _id: { $in: records.map((r) => r._id) }, account: dataform.account }, { $set });
+  changed(dataform, undefined, 'bulk');
   res.json({ affected: records.length });
 });
 
@@ -187,6 +201,14 @@ router.patch('/:recordId', validate({ params: recordParams, body: dataBody }), a
     record.updatedBy = req.auth.userId;
     await record.save();
     await writeHistory([{ account: dataform.account, dataform: dataform._id, record: record._id, action: 'update', user: req.auth.userId, changes }]);
+    const [actor, followers] = await Promise.all([User.findById(req.auth.userId).select('name').lean(), followersOf(record._id)]);
+    const names = changes.map((c) => fields.find((f) => f.key === c.field)?.label ?? c.field).join(', ');
+    await notify({
+      account: dataform.account, recipients: followers, actor: req.auth.userId, type: 'record_update',
+      title: `${actor?.name ?? 'Someone'} updated ${label(dataform, record.toObject())}`, body: `Changed: ${names}`,
+      link: `/w/${dataform.workspace}/f/${dataform._id}?record=${record._id}`,
+    });
+    changed(dataform, record._id, 'update');
   }
   res.json({ record, refs: await resolveRefs(req.auth, dataform, fields, [record.toObject()]) });
 });
@@ -204,6 +226,7 @@ router.post('/:recordId/copy', validate({ params: recordParams }), async (req, r
     account: dataform.account, workspace: dataform.workspace, dataform: dataform._id, data, createdBy: req.auth.userId, updatedBy: req.auth.userId,
   });
   await writeHistory([{ account: dataform.account, dataform: dataform._id, record: copy._id, action: 'create', user: req.auth.userId, changes: diff({}, data) }]);
+  changed(dataform, copy._id, 'create');
   res.status(201).json({ record: copy });
 });
 
@@ -212,6 +235,8 @@ router.delete('/:recordId', validate({ params: recordParams }), async (req, res)
   const record = await findRecord(req, dataform);
   await record.deleteOne();
   await clearReferences(dataform, [record._id]);
+  await purgeRecords(dataform.account, [record._id]);
+  changed(dataform, record._id, 'delete');
   await writeHistory([{ account: dataform.account, dataform: dataform._id, record: record._id, action: 'delete', user: req.auth.userId }]);
   res.status(204).end();
 });

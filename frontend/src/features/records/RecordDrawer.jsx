@@ -1,15 +1,21 @@
 import { useMemo, useState } from 'react';
-import { Box, Button, Divider, Drawer, IconButton, Skeleton, Stack, Tab, Tabs, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Divider, Drawer, IconButton, Skeleton, Stack, Tab, Tabs, Tooltip, Typography } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import dayjs from 'dayjs';
 import CloseIcon from '@mui/icons-material/CloseRounded';
 import CopyIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineRounded';
+import FollowIcon from '@mui/icons-material/NotificationsActiveRounded';
+import UnfollowIcon from '@mui/icons-material/NotificationsNoneRounded';
 import { ConfirmDialog, EmptyState, ErrorState } from '../../components/common';
 import { errorMessage } from '../../services/api';
 import { showToast } from '../ui/uiSlice';
+import AttachmentsPanel from '../collab/AttachmentsPanel';
+import CommentsPanel from '../collab/CommentsPanel';
+import { useListRecordCommentsQuery, useSetFollowMutation } from '../collab/collabApi';
+import RecordTasks from '../tasks/RecordTasks';
 import FieldInput from './FieldInput';
 import { buildFormSchema, defaultFormValues, formatValue, isFieldEditable, toApiValue } from './fieldUtils';
 import {
@@ -107,16 +113,26 @@ function RecordForm({ dataform, fields, record, refs, canWrite, mode, onClose, o
   );
 }
 
-export default function RecordDrawer({ open, dataform, fields, canWrite, recordId, onClose }) {
+export default function RecordDrawer({ open, dataform, fields, canWrite, canModerate, recordId, onClose }) {
   const dispatch = useDispatch();
+  const me = useSelector((st) => st.auth.user);
   const mode = recordId ? 'edit' : 'create';
   const [tab, setTab] = useState('details');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [loaded, setLoaded] = useState(null); // updatedAt the form was built from
   const { data, isLoading, error, refetch } = useGetRecordQuery({ dataformId: dataform._id, recordId }, { skip: !recordId });
+  const { data: discussion } = useListRecordCommentsQuery({ dataformId: dataform._id, recordId }, { skip: !recordId });
+  const [setFollow, followState] = useSetFollowMutation();
   const [copy] = useCopyRecordMutation();
   const [remove, removeState] = useDeleteRecordMutation();
   const writable = canWrite && dataform.status !== 'archived';
   const title = mode === 'create' ? `New ${dataform.name.replace(/s$/, '')}` : (data?.record && dataform.primaryField ? data.record.data[dataform.primaryField] : null) || 'Record';
+  const following = !!discussion?.following;
+
+  // If someone else saves this record while it is open, keep the user's unsaved edits and offer to reload instead of silently resetting the form.
+  const latest = data?.record?.updatedAt;
+  const baseline = loaded ?? latest;
+  const stale = mode === 'edit' && !!latest && !!baseline && latest !== baseline;
 
   const run = async (fn, ok) => {
     try { await fn().unwrap(); dispatch(showToast(ok)); return true; } catch (err) { dispatch(showToast(errorMessage(err), 'error')); return false; }
@@ -124,8 +140,18 @@ export default function RecordDrawer({ open, dataform, fields, canWrite, recordI
 
   return (
     <Drawer anchor="right" open={open} onClose={onClose} slotProps={{ paper: { sx: { width: { xs: '100%', sm: 520 }, display: 'flex' } } }}>
-      <Stack direction="row" spacing={1} sx={{ alignItems: "center", px: 3, py: 2, borderBottom: 1, borderColor: 'divider' }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', px: 3, py: 2, borderBottom: 1, borderColor: 'divider' }}>
         <Typography variant="h6" noWrap sx={{ flex: 1 }}>{title}</Typography>
+        {mode === 'edit' && (
+          <Tooltip title={following ? `Following (${discussion?.followers ?? 0}). Click to unfollow` : 'Follow to get notified about comments and changes'}>
+            <span>
+              <IconButton aria-label={following ? 'Unfollow record' : 'Follow record'} aria-pressed={following} color={following ? 'primary' : 'default'} disabled={followState.isLoading}
+                onClick={() => run(() => setFollow({ dataformId: dataform._id, recordId, follow: !following }), following ? 'You stopped following this record' : 'You are now following this record')}>
+                {following ? <FollowIcon /> : <UnfollowIcon />}
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
         {mode === 'edit' && writable && (
           <>
             <Tooltip title="Duplicate"><IconButton aria-label="Duplicate record" onClick={async () => { if (await run(() => copy({ dataformId: dataform._id, recordId }), 'Record duplicated')) onClose(); }}><CopyIcon /></IconButton></Tooltip>
@@ -135,22 +161,37 @@ export default function RecordDrawer({ open, dataform, fields, canWrite, recordI
         <IconButton aria-label="Close" onClick={onClose}><CloseIcon /></IconButton>
       </Stack>
       {mode === 'edit' && (
-        <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Tab value="details" label="Details" /><Tab value="history" label="History" />
+        <Tabs value={tab} onChange={(_e, v) => setTab(v)} variant="scrollable" sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Tab value="details" label="Details" />
+          <Tab value="comments" label="Comments" />
+          <Tab value="files" label="Files" />
+          <Tab value="tasks" label="Tasks" />
+          <Tab value="history" label="History" />
         </Tabs>
+      )}
+      {stale && tab === 'details' && (
+        <Alert severity="warning" sx={{ m: 2, mb: 0 }} action={<Button color="inherit" size="small" onClick={() => setLoaded(latest)}>Load latest</Button>}>
+          Someone else changed this record. Your edits are kept until you reload.
+        </Alert>
       )}
       {error ? <Box sx={{ p: 3 }}><ErrorState message={errorMessage(error, 'Could not load record')} onRetry={refetch} /></Box>
         : isLoading ? <Box sx={{ p: 3 }}><Skeleton variant="rounded" height={240} /></Box>
-          : tab === 'history' && mode === 'edit' ? <Box sx={{ p: 3, overflowY: 'auto' }}><HistoryTab dataformId={dataform._id} recordId={recordId} fields={fields} /></Box>
-            : (
-              <RecordForm
-                key={`${recordId ?? 'new'}-${data?.record?.updatedAt ?? ''}`} dataform={dataform} fields={fields} record={data?.record} refs={data?.refs}
-                canWrite={writable} mode={mode} onClose={onClose} onSaved={() => (mode === 'create' ? onClose() : undefined)}
-              />
-            )}
+          : mode === 'edit' && tab !== 'details' ? (
+            <Box sx={{ p: 3, overflowY: 'auto' }}>
+              {tab === 'history' && <HistoryTab dataformId={dataform._id} recordId={recordId} fields={fields} />}
+              {tab === 'comments' && <CommentsPanel kind="record" dataformId={dataform._id} recordId={recordId} canWrite={writable} canModerate={canModerate} />}
+              {tab === 'files' && <AttachmentsPanel dataformId={dataform._id} recordId={recordId} canWrite={writable} canModerate={canModerate} meId={me?._id} />}
+              {tab === 'tasks' && <RecordTasks workspaceId={dataform.workspace} recordId={recordId} recordLabel={title} canWrite={writable} />}
+            </Box>
+          ) : (
+            <RecordForm
+              key={`${recordId ?? 'new'}-${baseline ?? ''}`} dataform={dataform} fields={fields} record={data?.record} refs={data?.refs}
+              canWrite={writable} mode={mode} onClose={onClose} onSaved={(rec) => (mode === 'create' ? onClose() : setLoaded(rec?.updatedAt ?? null))}
+            />
+          )}
       <ConfirmDialog
         open={confirmDelete} destructive loading={removeState.isLoading} title="Delete this record?" confirmLabel="Delete"
-        message="The record is removed permanently. Its history entry is kept."
+        message="The record, its comments and its files are removed permanently. Its history entry is kept."
         onClose={() => setConfirmDelete(false)}
         onConfirm={async () => { if (await run(() => remove({ dataformId: dataform._id, recordId }), 'Record deleted')) { setConfirmDelete(false); onClose(); } }}
       />

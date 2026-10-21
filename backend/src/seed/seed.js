@@ -84,7 +84,7 @@ export async function seed() {
         members: memberUsers.filter(Boolean).map((u, i) => ({ user: u._id, role: i === 0 ? 'admin' : 'editor' })),
       }));
     }
-    if (t.sampleData) await seedSampleData(account, created, owner);
+    if (t.sampleData) await seedSampleData(account, created, owner, byEmail);
   }
 }
 

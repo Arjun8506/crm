@@ -4,7 +4,7 @@ import { Alert, Badge, Box, Button, Card, Checkbox, Dialog, DialogActions, Dialo
 import { DataGrid } from '@mui/x-data-grid';
 import { useForm } from 'react-hook-form';
 import { useDispatch } from 'react-redux';
-import { Link as RouterLink, useLocation, useParams } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/AddRounded';
 import FilterIcon from '@mui/icons-material/FilterListRounded';
 import SearchIcon from '@mui/icons-material/SearchRounded';
@@ -79,7 +79,11 @@ export default function DataformPage() {
   const [activeViewId, setActiveViewId] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [selection, setSelection] = useState({ type: 'include', ids: new Set() });
-  const [drawer, setDrawer] = useState({ open: false, recordId: null });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedRecord = searchParams.get('record');
+  const [drawerState, setDrawer] = useState({ open: false, recordId: null });
+  // A notification link (?record=<id>) opens that record; closing the drawer clears the parameter.
+  const drawer = linkedRecord ? { open: true, recordId: linkedRecord } : drawerState;
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkEdit, setBulkEdit] = useState(false);
   const [bulk, bulkState] = useBulkRecordsMutation();
@@ -227,7 +231,7 @@ export default function DataformPage() {
           onApply={(tree, d) => { setFilter(tree); setDraft(d); resetPage(); clearSelection(); setFilterOpen(false); }}
         />
       )}
-      {drawer.open && <RecordDrawer open dataform={dataform} fields={fields} canWrite={canWrite} recordId={drawer.recordId} onClose={() => setDrawer({ open: false, recordId: null })} />}
+      {drawer.open && <RecordDrawer open dataform={dataform} fields={fields} canWrite={canWrite} canModerate={access === 'admin'} recordId={drawer.recordId} onClose={() => { setDrawer({ open: false, recordId: null }); if (linkedRecord) setSearchParams({}, { replace: true }); }} />}
       {bulkEdit && (
         <BulkEditDialog
           open fields={fields} count={selectedIds.length} onClose={() => setBulkEdit(false)}

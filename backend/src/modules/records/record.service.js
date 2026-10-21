@@ -10,7 +10,8 @@ const validation = (errors) => badRequest('Validation failed', Object.entries(er
 // Validates and coerces client input against field definitions.
 // mode 'create': applies defaults and enforces required fields.
 // mode 'update': only keys present are touched.
-export function buildData(fields, input, mode) {
+// `system: true` is for writes made by workflows: read-only and hidden fields may be set, required fields are still enforced.
+export function buildData(fields, input, mode, { system = false } = {}) {
   const byKey = new Map(fields.map((f) => [f.key, f]));
   const errors = {};
   const data = {};
@@ -19,8 +20,8 @@ export function buildData(fields, input, mode) {
   for (const key of Object.keys(source)) {
     const f = byKey.get(key);
     if (!f) { errors[key] = 'Unknown field'; continue; }
-    if (f.readOnly) { errors[key] = 'This field is read-only'; continue; }
-    if (!f.visibility[mode === 'create' ? 'create' : 'edit']) { errors[key] = `This field cannot be set on ${mode}`; continue; }
+    if (f.readOnly && !system) { errors[key] = 'This field is read-only'; continue; }
+    if (!system && !f.visibility[mode === 'create' ? 'create' : 'edit']) { errors[key] = `This field cannot be set on ${mode}`; continue; }
     try {
       const v = parseValue(f, source[key]);
       if (v === null && f.required) errors[key] = 'This field is required';
@@ -36,7 +37,7 @@ export function buildData(fields, input, mode) {
       if (f.key in source) continue;
       if (!isEmpty(f.defaultValue)) {
         try { data[f.key] = parseValue(f, f.defaultValue); } catch { /* invalid default is ignored */ }
-      } else if (f.required && f.visibility.create && !f.readOnly) {
+      } else if (f.required && (system || (f.visibility.create && !f.readOnly))) {
         errors[f.key] = 'This field is required';
       }
     }

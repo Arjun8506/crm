@@ -19,6 +19,7 @@ export function connectSocket(store) {
   socket.on('record.changed', ({ dataformId }) => invalidate({ type: 'Records', id: dataformId }, { type: 'Dataform', id: 'LIST' }));
   socket.on('comment.changed', () => invalidate({ type: 'Comments', id: 'ALL' }, 'Comments'));
   socket.on('task.changed', () => invalidate({ type: 'Tasks', id: 'LIST' }, 'Tasks'));
+  socket.on('interaction.changed', () => invalidate({ type: 'Interactions', id: 'ALL' }, 'Interactions'));
   socket.on('attachment.changed', () => invalidate({ type: 'Attachments', id: 'ALL' }, 'Attachments'));
   socket.on('notification.new', async () => {
     invalidate({ type: 'Notifications', id: 'LIST' });

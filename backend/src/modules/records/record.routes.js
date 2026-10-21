@@ -10,6 +10,7 @@ import { autoFollow, followersOf } from '../comments/comment.service.js';
 import { notify } from '../notifications/notification.service.js';
 import { User } from '../users/user.model.js';
 import { purgeRecords } from './cleanup.js';
+import { runPreSave, triggerPostSave } from '../workflows/trigger.js';
 import { FieldDefinition } from '../dataforms/dataform.model.js';
 import { loadDataform } from '../dataforms/dataform.service.js';
 import { RecordHistory, RecordModel } from './record.model.js';
@@ -76,7 +77,8 @@ router.post(
 router.post('/', validate({ params: idParams, body: dataBody }), async (req, res) => {
   const { dataform, access } = await writable(req);
   const fields = await loadFields(dataform._id);
-  const data = buildData(fields, req.body.data, 'create');
+  const built = buildData(fields, req.body.data, 'create');
+  const { data } = await runPreSave({ dataform, fields, event: 'create', before: null, after: built, auth: req.auth });
   await checkReferences(req.auth, dataform, fields, data);
   const record = await RecordModel.create({
     account: dataform.account, workspace: dataform.workspace, dataform: dataform._id, data, createdBy: req.auth.userId, updatedBy: req.auth.userId,
@@ -84,6 +86,7 @@ router.post('/', validate({ params: idParams, body: dataBody }), async (req, res
   await writeHistory([{ account: dataform.account, dataform: dataform._id, record: record._id, action: 'create', user: req.auth.userId, changes: diff({}, data) }]);
   await autoFollow({ workspace: access.workspace, dataform: dataform._id, record: record._id, userIds: [req.auth.userId] });
   changed(dataform, record._id, 'create');
+  await triggerPostSave({ dataform, fields, event: 'create', before: null, after: record.data, recordId: record._id, version: record.createdAt.getTime(), actorId: req.auth.userId });
   res.status(201).json({ record, refs: await resolveRefs(req.auth, dataform, fields, [record]) });
 });
 
@@ -132,13 +135,16 @@ router.post(
     const [next, prev] = await Promise.all([rankOf(req.body.beforeId), rankOf(req.body.afterId)]);
     record.rank = next !== undefined && prev !== undefined ? (prev + next) / 2 : next !== undefined ? next - 1000 : prev !== undefined ? prev + 1000 : Date.now();
 
-    const changes = diff(record.data, { [stage.key]: value });
-    record.data = { ...record.data, [stage.key]: value };
+    const before = record.data;
+    const { data: moved } = await runPreSave({ dataform, fields, event: 'update', before, after: { ...before, [stage.key]: value }, recordId: record._id, auth: req.auth });
+    const changes = diff(before, moved);
+    record.data = moved;
     record.markModified('data');
     record.updatedBy = req.auth.userId;
     await record.save();
     await writeHistory(changes.length ? [{ account: dataform.account, dataform: dataform._id, record: record._id, action: 'update', user: req.auth.userId, changes }] : []);
     changed(dataform, record._id, 'update');
+    if (changes.length) await triggerPostSave({ dataform, fields, event: 'update', before, after: record.data, recordId: record._id, version: record.updatedAt.getTime(), actorId: req.auth.userId });
     res.json({ record });
   },
 );
@@ -156,12 +162,15 @@ router.post('/bulk', validate({
   const fields = await loadFields(dataform._id);
 
   if (req.body.action === 'delete') {
+    // Every record is checked first, so one blocked delete stops the whole batch before anything is removed.
+    for (const r of records) await runPreSave({ dataform, fields, event: 'delete', before: r.data, after: null, recordId: r._id, auth: req.auth });
     const found = records.map((r) => r._id);
     await RecordModel.deleteMany({ _id: { $in: found }, account: dataform.account });
     await clearReferences(dataform, found);
     await purgeRecords(dataform.account, found);
     changed(dataform, undefined, 'bulk');
     await writeHistory(found.map((record) => ({ account: dataform.account, dataform: dataform._id, record, action: 'delete', user: req.auth.userId })));
+    for (const r of records) await triggerPostSave({ dataform, fields, event: 'delete', before: r.data, after: null, recordId: r._id, version: Date.now(), actorId: req.auth.userId });
     return res.json({ affected: found.length });
   }
 
@@ -171,12 +180,20 @@ router.post('/bulk', validate({
   if (uniqueKey && records.length > 1) throw conflict(`"${uniqueKey.label}" must be unique, so it cannot be set on several records at once`);
   await checkReferences(req.auth, dataform, fields, patch, { excludeId: records[0]?._id });
 
-  await writeHistory(records.map((r) => ({
-    account: dataform.account, dataform: dataform._id, record: r._id, action: 'update', user: req.auth.userId, changes: diff(r.data, patch),
-  })).filter((h) => h.changes.length));
-  const $set = { updatedBy: req.auth.userId, ...Object.fromEntries(Object.entries(patch).map(([k, v]) => [`data.${k}`, v])) };
-  await RecordModel.updateMany({ _id: { $in: records.map((r) => r._id) }, account: dataform.account }, { $set });
+  // Each record goes through "before save" workflows on its own, so a rule cannot be bypassed with a bulk edit.
+  const ops = []; const histories = []; const saved = [];
+  for (const r of records) {
+    const { data: next } = await runPreSave({ dataform, fields, event: 'update', before: r.data, after: { ...r.data, ...patch }, recordId: r._id, auth: req.auth });
+    const changes = diff(r.data, next);
+    if (!changes.length) continue;
+    ops.push({ updateOne: { filter: { _id: r._id, account: dataform.account }, update: { $set: { updatedBy: req.auth.userId, ...Object.fromEntries(changes.map((c) => [`data.${c.field}`, next[c.field]])) } } } });
+    histories.push({ account: dataform.account, dataform: dataform._id, record: r._id, action: 'update', user: req.auth.userId, changes });
+    saved.push({ r, next });
+  }
+  if (ops.length) await RecordModel.bulkWrite(ops);
+  await writeHistory(histories);
   changed(dataform, undefined, 'bulk');
+  for (const { r, next } of saved) await triggerPostSave({ dataform, fields, event: 'update', before: r.data, after: next, recordId: r._id, version: Date.now(), actorId: req.auth.userId });
   res.json({ affected: records.length });
 });
 
@@ -191,7 +208,10 @@ router.patch('/:recordId', validate({ params: recordParams, body: dataBody }), a
   const { dataform } = await writable(req);
   const record = await findRecord(req, dataform);
   const fields = await loadFields(dataform._id);
-  const patch = buildData(fields, req.body.data, 'update');
+  const requested = buildData(fields, req.body.data, 'update');
+  const before = record.data;
+  const { data: next } = await runPreSave({ dataform, fields, event: 'update', before, after: { ...before, ...requested }, recordId: record._id, auth: req.auth });
+  const patch = Object.fromEntries(diff(before, next).map((c) => [c.field, next[c.field]]));
   await checkReferences(req.auth, dataform, fields, patch, { excludeId: record._id });
 
   const changes = diff(record.data, patch);
@@ -209,6 +229,7 @@ router.patch('/:recordId', validate({ params: recordParams, body: dataBody }), a
       link: `/w/${dataform.workspace}/f/${dataform._id}?record=${record._id}`,
     });
     changed(dataform, record._id, 'update');
+    await triggerPostSave({ dataform, fields, event: 'update', before, after: record.data, recordId: record._id, version: record.updatedAt.getTime(), actorId: req.auth.userId });
   }
   res.json({ record, refs: await resolveRefs(req.auth, dataform, fields, [record.toObject()]) });
 });
@@ -218,26 +239,31 @@ router.post('/:recordId/copy', validate({ params: recordParams }), async (req, r
   const source = await findRecord(req, dataform);
   const fields = await loadFields(dataform._id);
   // Unique and read-only fields are not carried over to the copy.
-  const data = Object.fromEntries(Object.entries(source.data).filter(([k]) => {
+  const copied = Object.fromEntries(Object.entries(source.data).filter(([k]) => {
     const f = fields.find((x) => x.key === k);
     return f && !f.unique && !f.readOnly;
   }));
+  const { data } = await runPreSave({ dataform, fields, event: 'create', before: null, after: copied, auth: req.auth });
   const copy = await RecordModel.create({
     account: dataform.account, workspace: dataform.workspace, dataform: dataform._id, data, createdBy: req.auth.userId, updatedBy: req.auth.userId,
   });
   await writeHistory([{ account: dataform.account, dataform: dataform._id, record: copy._id, action: 'create', user: req.auth.userId, changes: diff({}, data) }]);
   changed(dataform, copy._id, 'create');
+  await triggerPostSave({ dataform, fields, event: 'create', before: null, after: copy.data, recordId: copy._id, version: copy.createdAt.getTime(), actorId: req.auth.userId });
   res.status(201).json({ record: copy });
 });
 
 router.delete('/:recordId', validate({ params: recordParams }), async (req, res) => {
   const { dataform } = await writable(req);
   const record = await findRecord(req, dataform);
+  const fields = await loadFields(dataform._id);
+  await runPreSave({ dataform, fields, event: 'delete', before: record.data, after: null, recordId: record._id, auth: req.auth });
   await record.deleteOne();
   await clearReferences(dataform, [record._id]);
   await purgeRecords(dataform.account, [record._id]);
   changed(dataform, record._id, 'delete');
   await writeHistory([{ account: dataform.account, dataform: dataform._id, record: record._id, action: 'delete', user: req.auth.userId }]);
+  await triggerPostSave({ dataform, fields, event: 'delete', before: record.data, after: null, recordId: record._id, version: Date.now(), actorId: req.auth.userId });
   res.status(204).end();
 });
 

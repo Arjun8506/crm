@@ -21,6 +21,8 @@ import DashboardIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import ReportIcon from '@mui/icons-material/QueryStatsRounded';
 import TaskIcon from '@mui/icons-material/TaskAltRounded';
 import BellIcon from '@mui/icons-material/NotificationsNoneRounded';
+import AutoIcon from '@mui/icons-material/AutoFixHighOutlined';
+import PlugIcon from '@mui/icons-material/PowerOutlined';
 
 function NavItem({ to, icon, label, collapsed, end, onClick }) {
   const item = (
@@ -58,6 +60,7 @@ function SidebarContent({ collapsed, onNavigate }) {
         {current && <NavItem to={`/w/${current._id}`} icon={<HomeIcon />} label={current.name} collapsed={collapsed} end onClick={onNavigate} />}
         {current && dataforms.map((d) => <NavItem key={d._id} to={`/w/${current._id}/f/${d._id}`} icon={<TableIcon />} label={d.name} collapsed={collapsed} onClick={onNavigate} />)}
         {current && <NavItem to={`/w/${current._id}/tasks`} icon={<TaskIcon />} label="Workspace tasks" collapsed={collapsed} onClick={onNavigate} />}
+        {current && <NavItem to={`/w/${current._id}/workflows`} icon={<AutoIcon />} label="Automation" collapsed={collapsed} onClick={onNavigate} />}
         {current && <NavItem to={`/w/${current._id}/reports`} icon={<ReportIcon />} label="Reports & analysis" collapsed={collapsed} onClick={onNavigate} />}
         <Divider sx={{ my: 1.5 }} />
         {!collapsed && <ListSubheader disableSticky sx={{ bgcolor: 'transparent', lineHeight: '28px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Insights</ListSubheader>}
@@ -67,6 +70,7 @@ function SidebarContent({ collapsed, onNavigate }) {
         <Divider sx={{ my: 1.5 }} />
         {!collapsed && <ListSubheader disableSticky sx={{ bgcolor: 'transparent', lineHeight: '28px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Administration</ListSubheader>}
         <NavItem to="/team" icon={<PeopleIcon />} label={canManageUsers ? 'Team & roles' : 'Team'} collapsed={collapsed} onClick={onNavigate} />
+        {canManageUsers && <NavItem to="/settings/integrations" icon={<PlugIcon />} label="Integrations" collapsed={collapsed} onClick={onNavigate} />}
         <NavItem to="/settings/account" icon={<BusinessIcon />} label="Account & usage" collapsed={collapsed} onClick={onNavigate} />
         <NavItem to="/settings/profile" icon={<PersonIcon />} label="Profile & preferences" collapsed={collapsed} onClick={onNavigate} />
       </List>

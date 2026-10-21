@@ -9,6 +9,7 @@ const LABELS = {
   mention: 'Someone mentions me', comment: 'New comment on a record I follow', record_update: 'A record I follow is updated',
   task_assigned: 'A task is assigned to me', task_comment: 'Comment on one of my tasks', task_reminder: 'A task reminder fires',
   task_due: 'A task is due within 24 hours', task_overdue: 'A task becomes overdue', attachment: 'A file is added to a record I follow',
+  message_received: 'A customer replies by email, SMS or WhatsApp', workflow: 'A workflow notifies me', workflow_failed: 'A workflow I created fails',
 };
 
 export default function NotificationPreferences() {

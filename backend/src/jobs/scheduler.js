@@ -1,4 +1,5 @@
 import { notify } from '../modules/notifications/notification.service.js';
+import { runDueWorkflows } from '../modules/workflows/engine.js';
 import { Task } from '../modules/tasks/task.model.js';
 
 // In-process scheduler for task reminders and due-date notifications. Each notification is *claimed* with an
@@ -33,6 +34,7 @@ export async function runScheduledNotifications(now = new Date()) {
 export function startScheduler(intervalMs = 60_000) {
   const timer = setInterval(() => {
     runScheduledNotifications().catch((err) => console.error('[scheduler] run failed:', err.message));
+    runDueWorkflows().catch((err) => console.error('[scheduler] workflow run failed:', err.message));
   }, intervalMs);
   timer.unref();
   return () => clearInterval(timer);

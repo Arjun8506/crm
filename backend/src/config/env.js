@@ -13,6 +13,12 @@ const schema = z.object({
   EMAIL_FROM: z.string().default('OrgCRM <no-reply@localhost>'),
   APP_URL: z.string().default('http://localhost:5173'),
   STORAGE_DIR: z.string().default('./storage'),
+  // Encrypts integration credentials at rest. Set a long random value in production; falls back to a key derived from the JWT secret.
+  SECRETS_KEY: z.string().min(16).optional(),
+  // Public base URL of this API, shown to admins as the webhook URLs to give Twilio etc. and used to verify Twilio signatures.
+  PUBLIC_API_URL: z.string().default('http://localhost:4000'),
+  // Outbound webhooks to private / loopback addresses are blocked (SSRF protection). Enable only for local development.
+  ALLOW_PRIVATE_WEBHOOKS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
 });
 
 const parsed = schema.safeParse(process.env);

@@ -113,8 +113,35 @@ Two independent projects: `frontend/` (Vite React SPA) and `backend/` (Express A
 - A socket stays authorized until it disconnects (a removed member keeps an open connection until they reconnect), though they can no longer read anything because data still flows through the REST API
 - Comment editing history, rich text/markdown in comments, and read receipts
 
+## Phase 5: Automation and communication (DONE)
+- [x] Safe formula language (arithmetic, comparisons, logic, text, dates, lists, 30 functions) used by conditions and "set field" values, with a built-in tester
+- [x] Workflow engine: triggers (before/after save, before/after delete, manual, recurring schedule), conditions (field tests, formulas, "field changed", nested AND/OR), 13 action types, definitions stored as validated JSON
+- [x] Before-save rules can block a create, edit, Kanban move, copy, bulk edit or delete with the rule's own message, or compute values (including read-only fields). Applied to every write path so a rule cannot be sidestepped
+- [x] After-save actions run in a background queue with retries and backoff; every run is recorded with per-action results, and a retry resumes at the failed step so finished work is never repeated. Final failures notify the workflow's owner
+- [x] Loop protection: a workflow never re-triggers itself or a workflow already in its chain, and chains stop at 3 levels
+- [x] Recurring schedules (hourly/daily/weekly/monthly) in an IANA time zone, correct across daylight-saving changes; claimed atomically so several servers never queue a run twice; pause, resume, cancel queued runs
+- [x] Communication: email (account SMTP or server SMTP), SMS and WhatsApp (Twilio), Slack (incoming webhook), templates with record variables, call and note logging, one timeline per record. Inbound SMS/WhatsApp (signature-verified) and inbound email (shared secret) are filed on the matching record and notify followers
+- [x] Integrations page (account admins): encrypted credentials, masked display, real "send a test", copyable webhook URLs
+- [x] Visual workflow builder (trigger, conditions, actions as a connected flow), run history with details and retry, manual workflows as an Actions menu on records, message templates
+- [x] Job queue on MongoDB (atomic claim, retries, dedupe keys), replacing the Redis/BullMQ assumption so there is no extra infrastructure
+- [x] Seed: 5 example workflows (3 active), 3 templates and a communication history
+- [x] Tests: 138 backend tests (60 new): formula engine and its safety limits, condition evaluator, schedules across DST, SSRF checks, secrets, integrations, messaging and webhooks, and every workflow behaviour above. Verified in Chrome via Playwright, including a real Twilio call that is honestly rejected for fake credentials
+
+### Decisions
+- A before-save rule that itself errors never blocks a user: the failure is recorded in its run history ("fail-open"), because blocking all edits over a typo is worse than a rule briefly not applying. A rule that evaluates and says "block" always blocks.
+- Workflows act as their creator, like a service account, so editors can run a manual workflow without being able to do everything it does.
+- Delivery status: "sent" = provider accepted it, "delivered" = provider callback, "failed" = error text kept. Nothing is ever recorded as sent when it was not.
+- The Mongo-backed queue trades peak throughput for zero extra infrastructure. BullMQ would replace only queue.js.
+
+### Not done in Phase 5 (honest list)
+- PDF generation, voice call initiation, Python custom code, frontend custom code, and the AI action generator (each needs a separate isolated service or provider; custom code in particular needs a sandbox before it is safe to offer)
+- Per-record scheduled instances ("run 7 days after this record's date"): schedules run for all records on a calendar schedule
+- Per-user mailbox connections (OAuth to Gmail/Outlook) and provider-specific inbound email parsers: inbound email accepts a simple JSON payload with a shared secret
+- WhatsApp groups and message templates required by WhatsApp outside the 24-hour window; Slack channel or direct-message targeting beyond the single incoming webhook
+- Workflow versions/rollback, import/export of workflows, and a test mode that runs actions without side effects
+- Twilio webhooks need the server reachable from the internet at `PUBLIC_API_URL`; they cannot work on plain localhost
+
 ## Next phases
-5. Workflows and communication adapters.
 6. API docs (OpenAPI), webhooks, CSV import/export, public forms/shares.
 7. AI provider abstraction, billing, onboarding.
 8. Hardening: performance, accessibility audit, e2e (Playwright), deployment config.

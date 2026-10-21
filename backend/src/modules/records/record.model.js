@@ -29,6 +29,8 @@ const historySchema = new mongoose.Schema({
   record: { type: mongoose.Schema.Types.ObjectId, required: true },
   action: { type: String, enum: ['create', 'update', 'delete'], required: true },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  // Set when the change was made by a workflow rather than directly by the user.
+  workflow: { type: mongoose.Schema.Types.ObjectId, ref: 'Workflow' },
   // Bounded per entry; one entry per save, so no unbounded array growth on the record itself.
   changes: { type: [{ _id: false, field: String, from: mongoose.Schema.Types.Mixed, to: mongoose.Schema.Types.Mixed }], default: [] },
   at: { type: Date, default: Date.now },

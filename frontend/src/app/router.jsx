@@ -12,6 +12,9 @@ import DashboardsPage from '../features/analytics/DashboardsPage';
 import DashboardPage from '../features/analytics/DashboardPage';
 import TasksPage from '../features/tasks/TasksPage';
 import NotificationsPage from '../features/notifications/NotificationsPage';
+import WorkflowsPage from '../features/automation/WorkflowsPage';
+import WorkflowEditorPage from '../features/automation/WorkflowEditorPage';
+import IntegrationsPage from '../features/automation/IntegrationsPage';
 import TeamPage from '../features/users/TeamPage';
 import { AccountSettingsPage, ProfilePage } from '../features/settings/SettingsPages';
 import { EmptyState } from '../components/common';
@@ -36,6 +39,10 @@ export default function AppRoutes() {
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/w/:workspaceId/tasks" element={<TasksPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/w/:workspaceId/workflows" element={<WorkflowsPage />} />
+          <Route path="/w/:workspaceId/workflows/new" element={<WorkflowEditorPage />} />
+          <Route path="/w/:workspaceId/workflows/:workflowId" element={<WorkflowEditorPage />} />
+          <Route path="/settings/integrations" element={<IntegrationsPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/settings/account" element={<AccountSettingsPage />} />
           <Route path="/settings/profile" element={<ProfilePage />} />

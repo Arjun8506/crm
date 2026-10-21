@@ -17,6 +17,10 @@ import commentRoutes, { recordCommentRouter } from './modules/comments/comment.r
 import taskRoutes from './modules/tasks/task.routes.js';
 import notificationRoutes from './modules/notifications/notification.routes.js';
 import attachmentRoutes, { recordAttachmentRouter } from './modules/attachments/attachment.routes.js';
+import integrationRoutes from './modules/integrations/integration.routes.js';
+import communicationRoutes, { recordInteractionRouter } from './modules/interactions/interaction.routes.js';
+import webhookRoutes from './modules/interactions/webhook.routes.js';
+import workflowRoutes from './modules/workflows/workflow.routes.js';
 import workspaceRoutes from './modules/workspaces/workspace.routes.js';
 
 export function createApp() {
@@ -40,6 +44,7 @@ export function createApp() {
   app.use('/api/v1/workspaces', workspaceRoutes);
   app.use('/api/v1/dataforms/:id/records/:recordId', recordCommentRouter);
   app.use('/api/v1/dataforms/:id/records/:recordId', recordAttachmentRouter);
+  app.use('/api/v1/dataforms/:id/records/:recordId', recordInteractionRouter);
   app.use('/api/v1/dataforms/:id/records', recordRoutes);
   app.use('/api/v1/dataforms/:id/views', viewRoutes);
   app.use('/api/v1/dataforms/:id/analyze', analyzeRouter);
@@ -50,6 +55,10 @@ export function createApp() {
   app.use('/api/v1/tasks', taskRoutes);
   app.use('/api/v1/notifications', notificationRoutes);
   app.use('/api/v1/attachments', attachmentRoutes);
+  app.use('/api/v1/integrations', integrationRoutes);
+  app.use('/api/v1/communications', communicationRoutes);
+  app.use('/api/v1/workflows', workflowRoutes);
+  app.use('/api/v1/webhooks', webhookRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

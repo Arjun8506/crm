@@ -7,6 +7,10 @@ import { View } from '../modules/views/view.model.js';
 import { Comment, Follow } from '../modules/comments/comment.model.js';
 import { Notification } from '../modules/notifications/notification.model.js';
 import { Task, TaskActivity } from '../modules/tasks/task.model.js';
+import crypto from 'node:crypto';
+import { Interaction, Template } from '../modules/interactions/interaction.model.js';
+import { encrypt } from '../modules/integrations/secrets.js';
+import { Workflow, WorkflowExecution } from '../modules/workflows/workflow.model.js';
 import { Dashboard, Report } from '../modules/analytics/report.model.js';
 
 // Deterministic pseudo-random so every seed produces the same demo data.
@@ -123,6 +127,7 @@ export async function seedSampleData(account, workspaces, owner, users = {}) {
   });
 
   await seedCollaboration({ account, sales, owner, users, deals, contacts });
+  await seedAutomation({ account, sales, owner, users, deals, contacts, companies });
 
   const tickets = await makeForm(account, support, owner, 'tickets');
   const subjects = ['Cannot log in', 'Invoice discrepancy', 'Feature request: export', 'Slow dashboard', 'Password reset loop', 'Data import failed'];
@@ -135,7 +140,7 @@ export async function seedSampleData(account, workspaces, owner, users = {}) {
   })));
 }
 
-export const clearSampleData = () => Promise.all([Comment.deleteMany({}), Follow.deleteMany({}), Task.deleteMany({}), TaskActivity.deleteMany({}), Notification.deleteMany({}), Dataform.deleteMany({}), FieldDefinition.deleteMany({}), RecordModel.deleteMany({}), View.deleteMany({}), Report.deleteMany({}), Dashboard.deleteMany({})]);
+export const clearSampleData = () => Promise.all([Workflow.deleteMany({}), WorkflowExecution.deleteMany({}), Interaction.deleteMany({}), Template.deleteMany({}), Comment.deleteMany({}), Follow.deleteMany({}), Task.deleteMany({}), TaskActivity.deleteMany({}), Notification.deleteMany({}), Dataform.deleteMany({}), FieldDefinition.deleteMany({}), RecordModel.deleteMany({}), View.deleteMany({}), Report.deleteMany({}), Dashboard.deleteMany({})]);
 
 // Comments, tasks and notifications so the collaboration UI has something to show. Dates are relative to "now".
 async function seedCollaboration({ account, sales, owner, users, deals, contacts }) {
@@ -182,4 +187,65 @@ async function seedCollaboration({ account, sales, owner, users, deals, contacts
     note(priya, 'comment', 'Jordan Lee commented on a deal', 'Customer asked for revised pricing before Friday.', `/w/${sales._id}/f/${deals._id}?record=${dealRecs[0]._id}`, 50),
   ]);
 
+}
+
+// Example workflows and message templates. The first three are active; the scheduled ones start paused so a fresh demo
+// does not send anything on its own.
+async function seedAutomation({ account, sales, owner, users, deals, contacts, companies }) {
+  const eq = (field, value) => ({ kind: 'field', field, operator: 'eq', value });
+  const base = (dataform) => ({ account: account._id, workspace: sales._id, dataform: dataform._id, createdBy: owner._id, webhookSecret: encrypt(crypto.randomBytes(24).toString('hex')) });
+  const jordan = users['member@acme.test'] ?? owner;
+
+  const schedule = { frequency: 'weekly', time: '09:00', dayOfWeek: 1, timezone: 'America/New_York' };
+  await Workflow.insertMany([
+    {
+      ...base(deals), name: 'Won deals need a real value', description: 'Stops a deal being marked Won with a value under 1,000.', enabled: true,
+      trigger: { type: 'pre_save', events: ['create', 'update'] },
+      conditions: { kind: 'group', op: 'and', conditions: [eq('stage', 'won'), { kind: 'formula', expression: '{value} < 1000' }] },
+      actions: [{ type: 'validation_error', message: 'A won deal needs a value of at least 1,000 (this one is {{value}}).' }],
+    },
+    {
+      ...base(deals), name: 'Celebrate won deals', description: 'When a deal moves to Won: tell the team, add a comment and create a contract task.', enabled: true,
+      trigger: { type: 'post_save', events: ['update'] },
+      conditions: { kind: 'group', op: 'and', conditions: [{ kind: 'changed', field: 'stage' }, eq('stage', 'won')] },
+      actions: [
+        { type: 'notify', recipients: { mode: 'users', users: [String(owner._id), String(jordan._id)] }, title: 'Deal won: {{title}}', body: 'Worth {{value}}' },
+        { type: 'comment', body: 'Congratulations on winning {{title}}!' },
+        { type: 'create_task', title: 'Send contract for {{title}}', assignees: { mode: 'creator' }, dueInDays: 3, priority: 'high' },
+      ],
+    },
+    {
+      ...base(deals), name: 'Escalate to leadership', description: 'Run from a deal: alerts the owner and leaves a note.', enabled: true,
+      trigger: { type: 'manual', label: 'Escalate deal' }, conditions: null,
+      actions: [
+        { type: 'notify', recipients: { mode: 'users', users: [String(owner._id)] }, title: 'Escalation: {{title}}', body: 'Stage {{stage}}, value {{value}}. Raised by {{user.name}}.' },
+        { type: 'comment', body: 'Escalated to leadership.' },
+      ],
+    },
+    {
+      ...base(deals), name: 'Weekly: deals past their close date', description: 'Every Monday at 9:00 (New York) tell the owner about open deals that are overdue. Paused: enable it to start.', enabled: false,
+      trigger: { type: 'schedule', schedule },
+      conditions: { kind: 'group', op: 'and', conditions: [{ kind: 'formula', expression: 'ISEMPTY({close_date}) = false && {close_date} < TODAY() && !IN({stage}, "won", "lost")' }] },
+      actions: [{ type: 'notify', recipients: { mode: 'users', users: [String(owner._id)] }, title: 'Past close date: {{title}}', body: 'Expected {{close_date}}, still {{stage}}.' }],
+    },
+    {
+      ...base(companies), name: 'Mark linked contacts as customers', description: 'When a company record changes its industry, set its contacts to Customer.', enabled: false,
+      trigger: { type: 'post_save', events: ['update'] }, conditions: { kind: 'group', op: 'and', conditions: [{ kind: 'changed', field: 'industry' }] },
+      actions: [{ type: 'set_child_field', childDataformId: String(contacts._id), relationField: 'company', field: 'status', value: 'customer' }],
+    },
+  ]);
+  await Template.insertMany([
+    { account: account._id, workspace: sales._id, name: 'Follow-up email', channel: 'email', createdBy: owner._id, subject: 'Following up, {{name}}', body: 'Hi {{name}},\n\nI wanted to follow up on our recent conversation. Do you have time for a quick call this week?\n\nBest,\n{{user.name}}' },
+    { account: account._id, workspace: sales._id, name: 'Meeting confirmation', channel: 'email', createdBy: owner._id, subject: 'Confirming our meeting', body: 'Hi {{name}},\n\nThis is to confirm our meeting. Reply to this email if you need to reschedule.\n\n{{user.name}}' },
+    { account: account._id, workspace: sales._id, name: 'Quick check-in', channel: 'sms', createdBy: owner._id, body: 'Hi {{name}}, it is {{user.name}} from Acme. Do you have a minute to chat this week?' },
+  ]);
+
+  // A little communication history on the first contact, so the timeline has something in it.
+  const first = await RecordModel.findOne({ account: account._id, dataform: contacts._id }).sort({ rank: 1 }).lean();
+  const at = (hoursAgo) => new Date(Date.now() - hoursAgo * 36e5);
+  await Interaction.insertMany([
+    { account: account._id, workspace: sales._id, dataform: contacts._id, record: first._id, channel: 'email', direction: 'outbound', status: 'delivered', to: first.data.email, subject: 'Following up', body: 'Hi, I wanted to follow up on our conversation about the annual plan.', user: owner._id, createdAt: at(70) },
+    { account: account._id, workspace: sales._id, dataform: contacts._id, record: first._id, channel: 'email', direction: 'inbound', status: 'received', from: first.data.email, subject: 'Re: Following up', body: 'Thanks. Thursday afternoon works for me.', createdAt: at(52) },
+    { account: account._id, workspace: sales._id, dataform: contacts._id, record: first._id, channel: 'call', direction: 'outbound', status: 'logged', body: 'Walked through pricing. Wants a revised quote with onboarding included.', outcome: 'Interested', durationSec: 780, user: jordan._id, createdAt: at(26) },
+  ]);
 }

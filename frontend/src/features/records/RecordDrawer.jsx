@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Box, Button, Divider, Drawer, IconButton, Skeleton, Stack, Tab, Tabs, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Divider, Drawer, IconButton, Menu, MenuItem, Skeleton, Stack, Tab, Tabs, Tooltip, Typography } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useDispatch, useSelector } from 'react-redux';
@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import CloseIcon from '@mui/icons-material/CloseRounded';
 import CopyIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineRounded';
+import BoltIcon from '@mui/icons-material/BoltRounded';
 import FollowIcon from '@mui/icons-material/NotificationsActiveRounded';
 import UnfollowIcon from '@mui/icons-material/NotificationsNoneRounded';
 import { ConfirmDialog, EmptyState, ErrorState } from '../../components/common';
@@ -16,6 +17,8 @@ import AttachmentsPanel from '../collab/AttachmentsPanel';
 import CommentsPanel from '../collab/CommentsPanel';
 import { useListRecordCommentsQuery, useSetFollowMutation } from '../collab/collabApi';
 import RecordTasks from '../tasks/RecordTasks';
+import InteractionsPanel from '../automation/InteractionsPanel';
+import { useListWorkflowsQuery, useRunWorkflowMutation } from '../automation/automationApi';
 import FieldInput from './FieldInput';
 import { buildFormSchema, defaultFormValues, formatValue, isFieldEditable, toApiValue } from './fieldUtils';
 import {
@@ -120,9 +123,12 @@ export default function RecordDrawer({ open, dataform, fields, canWrite, canMode
   const [tab, setTab] = useState('details');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [loaded, setLoaded] = useState(null); // updatedAt the form was built from
+  const [actionsAnchor, setActionsAnchor] = useState(null);
   const { data, isLoading, error, refetch } = useGetRecordQuery({ dataformId: dataform._id, recordId }, { skip: !recordId });
   const { data: discussion } = useListRecordCommentsQuery({ dataformId: dataform._id, recordId }, { skip: !recordId });
   const [setFollow, followState] = useSetFollowMutation();
+  const { data: manualFlows = [] } = useListWorkflowsQuery({ workspaceId: dataform.workspace, dataformId: dataform._id, manual: true }, { skip: !recordId || !canWrite });
+  const [runFlow] = useRunWorkflowMutation();
   const [copy] = useCopyRecordMutation();
   const [remove, removeState] = useDeleteRecordMutation();
   const writable = canWrite && dataform.status !== 'archived';
@@ -152,6 +158,25 @@ export default function RecordDrawer({ open, dataform, fields, canWrite, canMode
             </span>
           </Tooltip>
         )}
+        {mode === 'edit' && writable && manualFlows.length > 0 && (
+          <>
+            <Button size="small" variant="outlined" startIcon={<BoltIcon />} onClick={(e) => setActionsAnchor(e.currentTarget)} aria-haspopup="menu">Actions</Button>
+            <Menu anchorEl={actionsAnchor} open={!!actionsAnchor} onClose={() => setActionsAnchor(null)}>
+              {manualFlows.map((w) => (
+                <MenuItem key={w._id} onClick={async () => {
+                  setActionsAnchor(null);
+                  try {
+                    const { execution } = await runFlow({ id: w._id, recordId }).unwrap();
+                    const label = w.trigger.label || w.name;
+                    if (execution.status === 'succeeded') dispatch(showToast(`${label}: done`));
+                    else if (execution.status === 'skipped') dispatch(showToast(`${label}: not applicable (${execution.error})`, 'info'));
+                    else dispatch(showToast(`${label} ${execution.status}: ${execution.error ?? 'see the run history'}`, 'error'));
+                  } catch (err) { dispatch(showToast(errorMessage(err, 'Could not run the action'), 'error')); }
+                }}>{w.trigger.label || w.name}</MenuItem>
+              ))}
+            </Menu>
+          </>
+        )}
         {mode === 'edit' && writable && (
           <>
             <Tooltip title="Duplicate"><IconButton aria-label="Duplicate record" onClick={async () => { if (await run(() => copy({ dataformId: dataform._id, recordId }), 'Record duplicated')) onClose(); }}><CopyIcon /></IconButton></Tooltip>
@@ -164,6 +189,7 @@ export default function RecordDrawer({ open, dataform, fields, canWrite, canMode
         <Tabs value={tab} onChange={(_e, v) => setTab(v)} variant="scrollable" sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Tab value="details" label="Details" />
           <Tab value="comments" label="Comments" />
+          <Tab value="timeline" label="Timeline" />
           <Tab value="files" label="Files" />
           <Tab value="tasks" label="Tasks" />
           <Tab value="history" label="History" />
@@ -180,6 +206,7 @@ export default function RecordDrawer({ open, dataform, fields, canWrite, canMode
             <Box sx={{ p: 3, overflowY: 'auto' }}>
               {tab === 'history' && <HistoryTab dataformId={dataform._id} recordId={recordId} fields={fields} />}
               {tab === 'comments' && <CommentsPanel kind="record" dataformId={dataform._id} recordId={recordId} canWrite={writable} canModerate={canModerate} />}
+              {tab === 'timeline' && <InteractionsPanel dataformId={dataform._id} recordId={recordId} workspaceId={dataform.workspace} fields={fields} canWrite={writable} canModerate={canModerate} meId={me?._id} />}
               {tab === 'files' && <AttachmentsPanel dataformId={dataform._id} recordId={recordId} canWrite={writable} canModerate={canModerate} meId={me?._id} />}
               {tab === 'tasks' && <RecordTasks workspaceId={dataform.workspace} recordId={recordId} recordLabel={title} canWrite={writable} />}
             </Box>

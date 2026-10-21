@@ -92,7 +92,7 @@ function ValueInput({ field, cond, onChange }) {
   return <TextField {...common} type={t} value={value} onChange={(e) => onChange(e.target.value)} slotProps={t === 'date' || t === 'datetime-local' ? { inputLabel: { shrink: true } } : undefined} />;
 }
 
-function ConditionRow({ cond, fields, onChange, onRemove }) {
+export function ConditionRow({ cond, fields, onChange, onRemove }) {
   const field = fields.find((f) => f.key === cond.field) ?? fields[0];
   return (
     <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>

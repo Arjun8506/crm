@@ -37,8 +37,29 @@ Two independent projects: `frontend/` (Vite React SPA) and `backend/` (Express A
 - The client bundle is one ~970 kB chunk; code-splitting by route is a Phase 8 item
 - I could not run a browser in this session, so the UI was verified by build, lint and live API calls, not by visual inspection. Please click through it once.
 
+## Phase 2: Dynamic data platform (DONE)
+- [x] Models: Dataform, FieldDefinition (separate from data), Record (`data` keyed by immutable field key), RecordHistory
+- [x] 13 field types (text, long text, email, URL, phone, integer, decimal, yes/no, date, date-time, dropdown, multi-select, relationship) with per-type validation, min/max, required, unique, read-only, defaults, per-field visibility for create / edit / table
+- [x] Dataforms: create (blank or from a form pack), edit, clone structure, archive/restore, delete (blocked while another dataform links to it); field add/edit/delete/reorder
+- [x] Records: CRUD, duplicate, bulk edit/delete (max 200), history with before/after values, created-by / updated-by
+- [x] Relationships: validated to the same account and workspace; labels resolved server-side; dangling links cleared on delete
+- [x] Server-side search, sort, pagination; filter engine with AND/OR, nested groups (depth 3), per-type operators, empty checks, between, relative dates, relationship filters
+- [x] UI: dataform cards on workspace home, sidebar navigation, MUI X data grid (column resize/visibility), record drawer with dynamic form + history tab, filter builder, field builder, bulk bar
+- [x] Seed: Acme gets Companies (12), Contacts (40, linked to companies), Deals (28), Tickets (18)
+- [x] Tests: 29 backend integration tests (19 new). Verified in a real browser (Chrome via Playwright): login, grid, search, filter, validation, create, settings, field dialog
+
+### Decisions
+- Values are stored under `data.<key>` with typed coercion on write (dates as `YYYY-MM-DD`, date-times as `Date`, relationships as ObjectId), so indexes and `$group` work directly. Trade-off: renaming a key is not allowed; labels can change freely.
+- Filter values are coerced per field type and regex input is escaped, so client input never reaches Mongo operators.
+- Search is a bounded regex over up to 15 text-like fields. Fine for tens of thousands of rows; Atlas Search / text indexes are the upgrade path.
+
+### Not done in Phase 2 (honest list)
+- Formula fields, user references, file/image fields, pipeline-stage fields, location fields, conditional/dependent fields, relationship-derived values and aggregates (these need the formula engine, attachments or Kanban from later phases)
+- Drag-and-drop field ordering (up/down buttons instead), column order persistence, field-level permissions beyond visibility flags, record-level authorization, CSV import/export, saved views/filters (Phase 3 / 6)
+- Custom field indexes are not created automatically; add them when a dataform grows large
+- No automated frontend component or e2e tests in the repo yet (the browser check was a one-off script)
+
 ## Next phases
-2. **Dynamic data platform**: Dataform, FieldDefinition, Record, RecordHistory; field builder; record CRUD; relationships; table view with server-side filtering/sort/pagination; bulk actions; dataform-level and field-level permissions.
 3. Views (card/kanban/calendar/map), saved views, reports, grouped analyzer, dashboards.
 4. Collaboration: comments, tasks, notifications, attachments, Socket.IO.
 5. Workflows and communication adapters.

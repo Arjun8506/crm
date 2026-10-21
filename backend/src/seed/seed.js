@@ -7,12 +7,15 @@ import { Workspace } from '../modules/workspaces/workspace.model.js';
 import { Session } from '../modules/auth/session.model.js';
 import { hashPassword } from '../modules/auth/auth.service.js';
 import { slugify } from '../utils/slug.js';
+import { RecordHistory } from '../modules/records/record.model.js';
+import { clearSampleData, seedSampleData } from './sampleData.js';
 
 export const DEMO_PASSWORD = 'Passw0rd!demo';
 
 const tenants = [
   {
     name: 'Acme Industries',
+    sampleData: true,
     plan: 'team',
     entitlements: { maxWorkspaces: 15, maxUsers: 50 },
     industry: 'Manufacturing',
@@ -48,7 +51,7 @@ const tenants = [
 ];
 
 export async function seed() {
-  await Promise.all([Account, User, Membership, Workspace, Session].map((m) => m.deleteMany({})));
+  await Promise.all([Account, User, Membership, Workspace, Session, RecordHistory].map((m) => m.deleteMany({})).concat(clearSampleData()));
   const passwordHash = await hashPassword(DEMO_PASSWORD);
 
   for (const t of tenants) {
@@ -67,9 +70,10 @@ export async function seed() {
       byEmail[u.email] = user;
     }
     const owner = byEmail[t.users[0].email];
+    const created = [];
     for (const w of t.workspaces) {
       const memberUsers = w.memberEmails ? w.memberEmails.map((e) => byEmail[e]) : t.users.slice(0, 4).map((u) => byEmail[u.email]);
-      await Workspace.create({
+      created.push(await Workspace.create({
         account: account._id,
         name: w.name,
         slug: slugify(w.name),
@@ -78,8 +82,9 @@ export async function seed() {
         visibility: w.visibility,
         createdBy: owner._id,
         members: memberUsers.filter(Boolean).map((u, i) => ({ user: u._id, role: i === 0 ? 'admin' : 'editor' })),
-      });
+      }));
     }
+    if (t.sampleData) await seedSampleData(account, created, owner);
   }
 }
 

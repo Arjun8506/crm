@@ -5,7 +5,7 @@ import { hideToast } from '../../features/ui/uiSlice';
 
 export function Logo({ size = 32, withText = true, collapsed = false }) {
   return (
-    <Stack direction="row" alignItems="center" spacing={1.25}>
+    <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
       <Box
         sx={{
           width: size, height: size, borderRadius: 2, flexShrink: 0, display: 'grid', placeItems: 'center',
@@ -25,12 +25,12 @@ export function PageHeader({ title, description, actions, breadcrumbs }) {
   return (
     <Box sx={{ mb: 3 }}>
       {breadcrumbs && <Box sx={{ mb: 0.5 }}>{breadcrumbs}</Box>}
-      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: "space-between", alignItems: { sm: 'center' } }}>
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="h5" component="h1" noWrap>{title}</Typography>
           {description && <Typography color="text.secondary" sx={{ mt: 0.5 }}>{description}</Typography>}
         </Box>
-        {actions && <Stack direction="row" spacing={1} flexShrink={0}>{actions}</Stack>}
+        {actions && <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>{actions}</Stack>}
       </Stack>
     </Box>
   );
@@ -38,7 +38,7 @@ export function PageHeader({ title, description, actions, breadcrumbs }) {
 
 export function EmptyState({ icon, title, description, action }) {
   return (
-    <Stack alignItems="center" textAlign="center" spacing={1.5} sx={{ py: 8, px: 2 }}>
+    <Stack spacing={1.5} sx={{ alignItems: "center", textAlign: "center", py: 8, px: 2 }}>
       {icon && <Box sx={{ color: 'text.disabled', '& svg': { fontSize: 48 } }}>{icon}</Box>}
       <Typography variant="h6">{title}</Typography>
       {description && <Typography color="text.secondary" sx={{ maxWidth: 420 }}>{description}</Typography>}

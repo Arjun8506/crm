@@ -8,6 +8,8 @@ import { errorHandler, notFoundHandler } from './middleware/error.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import accountRoutes from './modules/accounts/account.routes.js';
 import userRoutes from './modules/users/user.routes.js';
+import dataformRoutes from './modules/dataforms/dataform.routes.js';
+import recordRoutes from './modules/records/record.routes.js';
 import workspaceRoutes from './modules/workspaces/workspace.routes.js';
 
 export function createApp() {
@@ -29,6 +31,8 @@ export function createApp() {
   app.use('/api/v1/accounts', accountRoutes);
   app.use('/api/v1/users', userRoutes);
   app.use('/api/v1/workspaces', workspaceRoutes);
+  app.use('/api/v1/dataforms/:id/records', recordRoutes);
+  app.use('/api/v1/dataforms', dataformRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

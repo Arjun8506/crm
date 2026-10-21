@@ -38,21 +38,21 @@ export default function TeamPage() {
                   return (
                     <TableRow key={m.id} hover>
                       <TableCell>
-                        <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
                           <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: 14 }}>{m.user.name[0]}</Avatar>
                           <div><Typography fontWeight={500}>{m.user.name}</Typography><Typography variant="body2" color="text.secondary">{m.user.email}</Typography></div>
                         </Stack>
                       </TableCell>
                       <TableCell>
                         {editable ? (
-                          <TextField select size="small" value={m.role} onChange={(e) => change(m.id, { role: e.target.value })} inputProps={{ 'aria-label': `Role for ${m.user.name}` }} sx={{ minWidth: 120 }}>
+                          <TextField select size="small" value={m.role} onChange={(e) => change(m.id, { role: e.target.value })} slotProps={{ htmlInput: { 'aria-label': `Role for ${m.user.name}` } }} sx={{ minWidth: 120 }}>
                             {['admin', 'member', 'viewer'].map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
                           </TextField>
                         ) : <Chip size="small" label={m.role} color={m.role === 'owner' ? 'primary' : 'default'} />}
                       </TableCell>
                       <TableCell>
                         {editable ? (
-                          <TextField select size="small" value={m.status} onChange={(e) => change(m.id, { status: e.target.value })} inputProps={{ 'aria-label': `Status for ${m.user.name}` }} sx={{ minWidth: 120 }}>
+                          <TextField select size="small" value={m.status} onChange={(e) => change(m.id, { status: e.target.value })} slotProps={{ htmlInput: { 'aria-label': `Status for ${m.user.name}` } }} sx={{ minWidth: 120 }}>
                             <MenuItem value="active">active</MenuItem><MenuItem value="disabled">disabled</MenuItem>
                           </TextField>
                         ) : <Chip size="small" variant="outlined" label={m.status} />}

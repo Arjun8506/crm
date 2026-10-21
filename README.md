@@ -2,7 +2,7 @@
 
 A multi-tenant CRM platform on the MERN stack. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the roadmap, architecture decisions and what is and is not built.
 
-**Status: Phase 1 (foundation) complete.** Auth, accounts, workspaces, roles, a responsive MUI shell with light/dark themes, and seeded demo data. Dataforms, records, reports, workflows etc. are later phases.
+**Status: Phases 1-2 complete.** Foundation (auth, accounts, workspaces, roles, MUI shell, themes) plus the dynamic data platform (dataforms, custom fields, records, relationships, table view, search/sort/filter, bulk actions, history). Views, reports, workflows etc. are later phases.
 
 ## Layout
 Two independent projects with their own `package.json` and `node_modules`. There is no root package.json.
@@ -60,6 +60,22 @@ Base path `/api/v1`. Errors use `{ "error": { "code", "message", "details?" } }`
 | `GET, PATCH /accounts/current` | Account details, usage, settings |
 | `GET /users`, `PATCH /users/:id`, `PATCH /users/me` | Members, role/status changes, own profile |
 | `GET, POST /workspaces`; `GET, PATCH, DELETE /workspaces/:id`; `POST /workspaces/:id/clone` | Workspaces |
+| `GET /dataforms/types` | Field types, their filter operators, and form-pack templates |
+| `GET, POST /dataforms?workspaceId=`; `GET, PATCH, DELETE /dataforms/:id`; `POST /dataforms/:id/clone` | Dataforms (workspace admins build; archive via `status`) |
+| `POST /dataforms/:id/fields`; `PATCH, DELETE /dataforms/:id/fields/:fieldId`; `PUT /dataforms/:id/fields/order` | Field builder |
+| `POST /dataforms/:id/records/query` | Paginated records: `{ page, limit, sort: "key:asc", q, filter }` |
+| `POST /dataforms/:id/records`; `GET, PATCH, DELETE /dataforms/:id/records/:recordId`; `POST .../:recordId/copy`; `GET .../:recordId/history` | Record CRUD, duplicate, audit history |
+| `POST /dataforms/:id/records/bulk` | `{ action: "update"\|"delete", ids (max 200), data? }` |
+
+**Filter format** (validated and compiled server-side; unknown fields/operators are rejected):
+```json
+{ "op": "and", "conditions": [
+  { "field": "status", "operator": "eq", "value": "customer" },
+  { "op": "or", "conditions": [
+    { "field": "name", "operator": "contains", "value": "grace" },
+    { "field": "last_contacted", "operator": "inLastDays", "value": 30 } ] } ] }
+```
+Access levels per workspace: viewer (read), editor (records), admin (dataform structure). Account owners/admins are admins everywhere; account viewers are always read-only.
 
 ## Security notes
 - Account ID and role come from the verified token plus a fresh `Membership` lookup on every request, never from the client.

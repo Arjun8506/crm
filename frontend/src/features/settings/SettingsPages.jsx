@@ -21,7 +21,7 @@ const profileSchema = z.object({ name: z.string().trim().min(1, 'Enter your name
 function UsageBar({ label, value, max }) {
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between"><Typography variant="body2">{label}</Typography><Typography variant="body2" color="text.secondary">{value} / {max}</Typography></Stack>
+      <Stack direction="row" sx={{ justifyContent: "space-between" }}><Typography variant="body2">{label}</Typography><Typography variant="body2" color="text.secondary">{value} / {max}</Typography></Stack>
       <LinearProgress variant="determinate" value={Math.min(100, (value / max) * 100)} sx={{ mt: 0.75, height: 8, borderRadius: 4 }} />
     </Box>
   );
@@ -60,7 +60,7 @@ export function AccountSettingsPage() {
             )}
           </Card>
           <Card sx={{ p: 3 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}>
               <Typography variant="h6">Plan</Typography>
               {account && <Chip color="primary" label={account.plan.toUpperCase()} size="small" />}
             </Stack>

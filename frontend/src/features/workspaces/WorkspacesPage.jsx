@@ -22,7 +22,7 @@ function WorkspaceCard({ ws, canCreate, onOpen, onEdit, onClone, onDelete, index
         <Box sx={{ height: 4, bgcolor: ws.color }} />
         <CardActionArea onClick={onOpen} sx={{ p: 2.5, pb: 3, height: '100%', alignItems: 'flex-start' }}>
           <Stack spacing={1} sx={{ pr: 3 }}>
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
               <Typography variant="h6" noWrap>{ws.name}</Typography>
               {ws.visibility === 'private' && <LockIcon fontSize="small" color="disabled" titleAccess="Private" />}
             </Stack>

@@ -15,6 +15,8 @@ import { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_WIDTH } from '../app/theme';
 import { setMobileNav, toggleSidebar } from '../features/ui/uiSlice';
 import { selectCan } from '../features/auth/authSlice';
 import { useListWorkspacesQuery } from '../features/workspaces/workspacesApi';
+import { useListDataformsQuery } from '../features/dataforms/dataformsApi';
+import TableIcon from '@mui/icons-material/TableRowsOutlined';
 
 function NavItem({ to, icon, label, collapsed, end, onClick }) {
   const item = (
@@ -41,6 +43,7 @@ function SidebarContent({ collapsed, onNavigate }) {
   const canManageUsers = useSelector(selectCan('user:manage'));
   const { data: workspaces = [] } = useListWorkspacesQuery();
   const current = workspaces.find((w) => w._id === currentId);
+  const { data: dataforms = [] } = useListDataformsQuery({ workspaceId: currentId }, { skip: !current });
 
   return (
     <Stack sx={{ height: '100%', px: 1.5, py: 2 }}>
@@ -49,6 +52,7 @@ function SidebarContent({ collapsed, onNavigate }) {
         {!collapsed && <ListSubheader disableSticky sx={{ bgcolor: 'transparent', lineHeight: '28px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Workspace</ListSubheader>}
         <NavItem to="/workspaces" icon={<WorkspacesIcon />} label="All workspaces" collapsed={collapsed} onClick={onNavigate} />
         {current && <NavItem to={`/w/${current._id}`} icon={<HomeIcon />} label={current.name} collapsed={collapsed} end onClick={onNavigate} />}
+        {current && dataforms.map((d) => <NavItem key={d._id} to={`/w/${current._id}/f/${d._id}`} icon={<TableIcon />} label={d.name} collapsed={collapsed} onClick={onNavigate} />)}
         <Divider sx={{ my: 1.5 }} />
         {!collapsed && <ListSubheader disableSticky sx={{ bgcolor: 'transparent', lineHeight: '28px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Administration</ListSubheader>}
         <NavItem to="/team" icon={<PeopleIcon />} label={canManageUsers ? 'Team & roles' : 'Team'} collapsed={collapsed} onClick={onNavigate} />

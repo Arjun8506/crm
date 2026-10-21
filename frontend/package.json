@@ -15,6 +15,7 @@
     "@hookform/resolvers": "^5.9.2",
     "@mui/icons-material": "^9.5.0",
     "@mui/material": "^9.5.0",
+    "@mui/x-data-grid": "^9.16.0",
     "@reduxjs/toolkit": "^2.13.0",
     "dayjs": "^1.11.23",
     "framer-motion": "^14.5.0",

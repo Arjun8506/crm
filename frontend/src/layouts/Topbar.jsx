@@ -30,7 +30,7 @@ function WorkspaceSelect() {
   return (
     <Select
       size="small" displayEmpty value={value} onChange={(e) => navigate(`/w/${e.target.value}`)}
-      inputProps={{ 'aria-label': 'Select workspace' }} sx={{ minWidth: 190, maxWidth: 240, bgcolor: 'background.default' }}
+      SelectDisplayProps={{ 'aria-label': 'Select workspace' }} sx={{ minWidth: 190, maxWidth: 240, bgcolor: 'background.default' }}
       renderValue={(v) => (v ? workspaces.find((w) => w._id === v)?.name : <Typography color="text.secondary">Select workspace</Typography>)}
     >
       {workspaces.map((w) => (
@@ -63,12 +63,11 @@ export default function Topbar() {
         {isDesktop && (
           <TextField
             placeholder="Search (coming soon)" disabled sx={{ flex: 1, maxWidth: 420, ml: 1 }}
-            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> } }}
-            inputProps={{ 'aria-label': 'Global search' }}
+            slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }, htmlInput: { 'aria-label': 'Global search' } }}
           />
         )}
         <Box sx={{ flex: 1 }} />
-        <Stack direction="row" spacing={0.5} alignItems="center">
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
           <Tooltip title="Theme"><IconButton onClick={(e) => setThemeAnchor(e.currentTarget)} aria-label="Change theme">{current.icon}</IconButton></Tooltip>
           <Tooltip title="Notifications"><IconButton onClick={soon('Notifications')} aria-label="Notifications"><NotificationsIcon /></IconButton></Tooltip>
           {isDesktop && <Tooltip title="Help"><IconButton onClick={soon('The help centre')} aria-label="Help"><HelpIcon /></IconButton></Tooltip>}

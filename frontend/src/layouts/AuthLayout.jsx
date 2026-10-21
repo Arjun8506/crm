@@ -13,7 +13,7 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
       }}
     >
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} style={{ width: '100%', maxWidth: 420 }}>
-        <Stack alignItems="center" sx={{ mb: 3 }}><Logo size={40} /></Stack>
+        <Stack sx={{ alignItems: "center", mb: 3 }}><Logo size={40} /></Stack>
         <Card sx={{ p: { xs: 3, sm: 4 } }}>
           <Typography variant="h5" component="h1">{title}</Typography>
           <Typography color="text.secondary" sx={{ mt: 0.5, mb: 3 }}>{subtitle}</Typography>

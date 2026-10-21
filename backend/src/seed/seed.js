@@ -17,7 +17,7 @@ const tenants = [
     name: 'Acme Industries',
     sampleData: true,
     plan: 'team',
-    entitlements: { maxWorkspaces: 15, maxUsers: 50 },
+    entitlements: { maxWorkspaces: 15, maxUsers: 50, locationFields: true },
     industry: 'Manufacturing',
     timezone: 'America/New_York',
     users: [

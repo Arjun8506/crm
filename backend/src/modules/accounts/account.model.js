@@ -15,6 +15,7 @@ const accountSchema = new mongoose.Schema(
       maxWorkspaces: { type: Number, default: 5 },
       maxUsers: { type: Number, default: 10 },
       maxUploadMb: { type: Number, default: 25 },
+      locationFields: { type: Boolean, default: false },
     },
     onboarding: { completedAt: Date },
   },

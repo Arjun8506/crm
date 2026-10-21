@@ -1,14 +1,20 @@
 import { useMemo, useState } from 'react';
-import { Alert, Badge, Box, Button, Card, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, InputAdornment, Link, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Alert, Badge, Box, Button, Card, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, InputAdornment, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import { useForm } from 'react-hook-form';
 import { useDispatch } from 'react-redux';
-import { Link as RouterLink, useParams } from 'react-router-dom';
-import dayjs from 'dayjs';
+import { Link as RouterLink, useLocation, useParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/AddRounded';
 import FilterIcon from '@mui/icons-material/FilterListRounded';
 import SearchIcon from '@mui/icons-material/SearchRounded';
 import SettingsIcon from '@mui/icons-material/SettingsOutlined';
+import DownloadIcon from '@mui/icons-material/FileDownloadOutlined';
+import TableViewIcon from '@mui/icons-material/TableRowsOutlined';
+import CardsIcon from '@mui/icons-material/GridViewOutlined';
+import KanbanIcon from '@mui/icons-material/ViewKanbanOutlined';
+import CalendarIcon from '@mui/icons-material/CalendarMonthOutlined';
+import MapIcon from '@mui/icons-material/PlaceOutlined';
 import TableIcon from '@mui/icons-material/TableChartOutlined';
 import { ConfirmDialog, EmptyState, ErrorState, PageHeader, PageTransition } from '../../components/common';
 import { errorMessage } from '../../services/api';
@@ -16,38 +22,18 @@ import useDebounce from '../../hooks/useDebounce';
 import { showToast } from '../ui/uiSlice';
 import { useGetDataformQuery } from '../dataforms/dataformsApi';
 import FieldInput from './FieldInput';
-import FilterBuilder, { countConditions } from './FilterBuilder';
+import FilterBuilder, { countConditions, deserialize } from './FilterBuilder';
+import { store } from '../../app/store';
+import { downloadFile } from '../../services/download';
+import CardsView from '../views/CardsView';
+import KanbanView from '../views/KanbanView';
+import CalendarView from '../views/CalendarView';
+import MapView from '../views/MapView';
+import ViewsToolbar from '../views/ViewsToolbar';
 import RecordDrawer from './RecordDrawer';
-import { formatValue, isFieldEditable, optionLabel, toApiValue, toFormValue } from './fieldUtils';
+import { buildColumns } from './columns';
+import { isFieldEditable, toApiValue, toFormValue } from './fieldUtils';
 import { useBulkRecordsMutation, useQueryRecordsQuery } from './recordsApi';
-
-const UNSORTABLE = new Set(['multiselect', 'textarea']);
-const WIDTH = { textarea: 240, url: 200, email: 220, datetime: 170, date: 130, boolean: 100, integer: 120, decimal: 120, relationship: 180 };
-
-function buildColumns(fields, refs) {
-  const cols = fields.filter((f) => f.visibility.list).map((f) => ({
-    field: f.key,
-    headerName: f.label,
-    width: WIDTH[f.type] ?? 170,
-    sortable: !UNSORTABLE.has(f.type),
-    type: f.type === 'integer' || f.type === 'decimal' ? 'number' : undefined,
-    valueGetter: (_v, row) => row.data?.[f.key] ?? null,
-    renderCell: ({ value }) => {
-      if (value === null || value === undefined || value === '' || (Array.isArray(value) && !value.length)) return <Typography color="text.disabled">-</Typography>;
-      switch (f.type) {
-        case 'boolean': return <Chip size="small" label={value ? 'Yes' : 'No'} color={value ? 'success' : 'default'} variant={value ? 'filled' : 'outlined'} />;
-        case 'dropdown': return <Chip size="small" label={optionLabel(f, value)} />;
-        case 'multiselect': return <Stack direction="row" spacing={0.5}>{value.map((v) => <Chip key={v} size="small" variant="outlined" label={optionLabel(f, v)} />)}</Stack>;
-        case 'relationship': return <Chip size="small" variant="outlined" label={refs?.[f.key]?.[value] ?? 'Unknown record'} />;
-        case 'url': return <Link href={value} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{value.replace(/^https?:\/\//, '')}</Link>;
-        case 'email': return <Link href={`mailto:${value}`} onClick={(e) => e.stopPropagation()}>{value}</Link>;
-        default: return formatValue(f, value);
-      }
-    },
-  }));
-  cols.push({ field: 'updatedAt', headerName: 'Updated', width: 150, valueGetter: (_v, row) => row.updatedAt, valueFormatter: (v) => dayjs(v).format('MMM D, YYYY') });
-  return cols;
-}
 
 function BulkEditDialog({ open, fields, count, onClose, onApply }) {
   const editable = fields.filter((f) => isFieldEditable(f, 'edit') && !f.unique);
@@ -84,8 +70,13 @@ export default function DataformPage() {
   const [sortModel, setSortModel] = useState([{ field: 'updatedAt', sort: 'desc' }]);
   const [search, setSearch] = useState('');
   const q = useDebounce(search, 300);
-  const [filter, setFilter] = useState(null);
+  const location = useLocation();
+  const [filter, setFilter] = useState(() => location.state?.filter ?? null);
   const [draft, setDraft] = useState(null);
+  const [viewType, setViewType] = useState('table');
+  const [viewConfig, setViewConfig] = useState({});
+  const [hidden, setHidden] = useState([]);
+  const [activeViewId, setActiveViewId] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [selection, setSelection] = useState({ type: 'include', ids: new Set() });
   const [drawer, setDrawer] = useState({ open: false, recordId: null });
@@ -98,7 +89,7 @@ export default function DataformPage() {
     dataformId, page: paging.page + 1, limit: paging.pageSize, q: q || undefined, filter: filter || undefined,
     sort: sortModel[0] ? `${sortModel[0].field}:${sortModel[0].sort}` : 'updatedAt:desc',
   }), [dataformId, paging, q, filter, sortModel]);
-  const { data, isFetching, error, refetch } = useQueryRecordsQuery(args, { skip: !fields });
+  const { data, isFetching, error, refetch } = useQueryRecordsQuery(args, { skip: !fields || viewType !== 'table' });
 
   const columns = useMemo(() => (fields ? buildColumns(fields, data?.refs) : []), [fields, data?.refs]);
   const rows = data?.data ?? [];
@@ -125,6 +116,40 @@ export default function DataformPage() {
     }
   };
 
+  const sortString = sortModel[0] ? `${sortModel[0].field}:${sortModel[0].sort}` : undefined;
+  const snapshot = () => ({ type: viewType, config: { q: search || undefined, filter: filter || undefined, sort: sortString, hiddenColumns: hidden, ...viewConfig } });
+  const applyView = (view, { silent } = {}) => {
+    const c = view.config || {};
+    setActiveViewId(view._id);
+    if (silent) return;
+    setViewType(view.type);
+    setSearch(c.q ?? '');
+    setFilter(c.filter ?? null);
+    setDraft(null);
+    setHidden(c.hiddenColumns ?? []);
+    const [field, dir] = (c.sort || 'updatedAt:desc').split(':');
+    setSortModel([{ field, sort: dir }]);
+    setViewConfig({ groupField: c.groupField, dateField: c.dateField, locationField: c.locationField, cardFields: c.cardFields });
+    resetPage();
+    clearSelection();
+  };
+  const clearView = () => {
+    setActiveViewId(null); setViewType('table'); setViewConfig({}); setHidden([]); setSearch(''); setFilter(null); setDraft(null);
+    setSortModel([{ field: 'updatedAt', sort: 'desc' }]); resetPage();
+  };
+  const exportCsv = async () => {
+    try {
+      const visible = fields.filter((f) => f.visibility.list && !hidden.includes(f.key)).map((f) => f.key);
+      await downloadFile(store, `/dataforms/${dataformId}/records/export`, { q: q || undefined, filter: filter || undefined, sort: sortString, columns: visible }, `${dataform.slug}.csv`);
+    } catch (err) { dispatch(showToast(err.message, 'error')); }
+  };
+  const hasLocation = fields.some((f) => f.type === 'location');
+  const viewQuery = { q, filter, sort: undefined };
+  const common = {
+    dataform, fields, query: viewQuery, config: viewConfig, canWrite,
+    onConfig: (patch) => setViewConfig((c) => ({ ...c, ...patch })), onOpen: (id) => setDrawer({ open: true, recordId: id }),
+  };
+
   const newButton = canWrite && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawer({ open: true, recordId: null })}>New record</Button>;
   const settingsButton = access === 'admin' && <Button component={RouterLink} to={`/w/${workspaceId}/f/${dataformId}/settings`} startIcon={<SettingsIcon />} color="inherit">Settings</Button>;
 
@@ -132,6 +157,17 @@ export default function DataformPage() {
     <PageTransition>
       <PageHeader title={dataform.name} description={dataform.description} actions={<>{settingsButton}{newButton}</>} />
       {dataform.status === 'archived' && <Alert severity="info" sx={{ mb: 2 }}>This dataform is archived. Records are read-only.</Alert>}
+
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2, justifyContent: 'space-between', alignItems: { md: 'center' } }}>
+        <ToggleButtonGroup size="small" exclusive value={viewType} onChange={(_e, v) => v && setViewType(v)} aria-label="Layout">
+          <ToggleButton value="table"><TableViewIcon fontSize="small" sx={{ mr: 0.75 }} />Table</ToggleButton>
+          <ToggleButton value="cards"><CardsIcon fontSize="small" sx={{ mr: 0.75 }} />Cards</ToggleButton>
+          <ToggleButton value="kanban"><KanbanIcon fontSize="small" sx={{ mr: 0.75 }} />Board</ToggleButton>
+          <ToggleButton value="calendar"><CalendarIcon fontSize="small" sx={{ mr: 0.75 }} />Calendar</ToggleButton>
+          <ToggleButton value="map" disabled={!hasLocation} title={hasLocation ? undefined : 'Needs a Location field'}><MapIcon fontSize="small" sx={{ mr: 0.75 }} />Map</ToggleButton>
+        </ToggleButtonGroup>
+        <ViewsToolbar dataformId={dataformId} canShare={access !== 'viewer'} snapshot={snapshot} activeId={activeViewId} onApply={applyView} onClear={clearView} />
+      </Stack>
 
       <Card>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' }, p: 2 }}>
@@ -144,10 +180,11 @@ export default function DataformPage() {
           </Badge>
           {filterCount > 0 && <Button size="small" onClick={() => { setFilter(null); setDraft(null); resetPage(); }}>Clear filters</Button>}
           <Box sx={{ flex: 1 }} />
-          {data && <Typography variant="body2" color="text.secondary">{data.total.toLocaleString()} record{data.total === 1 ? '' : 's'}</Typography>}
+          {viewType === 'table' && data && <Typography variant="body2" color="text.secondary">{data.total.toLocaleString()} record{data.total === 1 ? '' : 's'}</Typography>}
+          <Button size="small" color="inherit" startIcon={<DownloadIcon />} onClick={exportCsv}>Export CSV</Button>
         </Stack>
 
-        {selectedIds.length > 0 && (
+        {viewType === 'table' && selectedIds.length > 0 && (
           <Stack direction="row" spacing={1} sx={{ alignItems: "center", px: 2, py: 1, bgcolor: 'action.selected' }}>
             <Checkbox checked indeterminate={false} onChange={clearSelection} slotProps={{ input: { 'aria-label': 'Clear selection' } }} />
             <Typography sx={{ flex: 1 }}>{selectedIds.length} selected</Typography>
@@ -156,13 +193,19 @@ export default function DataformPage() {
           </Stack>
         )}
 
-        {error ? <Box sx={{ p: 2 }}><ErrorState message={errorMessage(error, 'Could not load records')} onRetry={refetch} /></Box> : (
+        {viewType === 'cards' && <CardsView {...common} query={{ ...viewQuery, sort: 'updatedAt:desc' }} />}
+        {viewType === 'kanban' && <KanbanView {...common} />}
+        {viewType === 'calendar' && <CalendarView {...common} />}
+        {viewType === 'map' && <MapView {...common} />}
+        {viewType === 'table' && (error ? <Box sx={{ p: 2 }}><ErrorState message={errorMessage(error, 'Could not load records')} onRetry={refetch} /></Box> : (
           <DataGrid
             autoHeight rows={rows} columns={columns} getRowId={(r) => r._id} loading={isFetching || !fields} rowCount={data?.total ?? 0}
             paginationMode="server" sortingMode="server" filterMode="server" pageSizeOptions={[10, 25, 50, 100]} paginationModel={{ page: paging.page, pageSize: paging.pageSize }}
             onPaginationModelChange={(m) => { setPaging(m); }} sortModel={sortModel} onSortModelChange={(m) => { setSortModel(m); resetPage(); }}
             checkboxSelection={canWrite} disableRowSelectionOnClick rowSelectionModel={selection} onRowSelectionModelChange={setSelection}
             onRowClick={(p) => setDrawer({ open: true, recordId: p.row._id })} disableColumnFilter density="compact" showToolbar
+            columnVisibilityModel={Object.fromEntries(hidden.map((k) => [k, false]))}
+            onColumnVisibilityModelChange={(m) => setHidden(Object.entries(m).filter(([, v]) => v === false).map(([k]) => k))}
             slotProps={{ toolbar: { csvOptions: { disableToolbarButton: true }, printOptions: { disableToolbarButton: true } } }}
             slots={{
               noRowsOverlay: () => (
@@ -175,12 +218,12 @@ export default function DataformPage() {
             }}
             sx={{ border: 0, borderTop: 1, borderColor: 'divider', '& .MuiDataGrid-row': { cursor: 'pointer' }, '& .MuiDataGrid-cell:focus': { outline: 'none' } }}
           />
-        )}
+        ))}
       </Card>
 
       {filterOpen && (
         <FilterBuilder
-          open fields={fields} draft={draft} onClose={() => setFilterOpen(false)}
+          open fields={fields} draft={draft ?? deserialize(filter, fields)} onClose={() => setFilterOpen(false)}
           onApply={(tree, d) => { setFilter(tree); setDraft(d); resetPage(); clearSelection(); setFilterOpen(false); }}
         />
       )}

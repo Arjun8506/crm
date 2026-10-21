@@ -90,6 +90,17 @@ export const TYPES = {
       return [...new Set(v)];
     },
   },
+  location: {
+    group: 'location',
+    parse: (v) => {
+      const lat = Number(v?.lat);
+      const lng = Number(v?.lng);
+      if (v === null || typeof v !== 'object' || !Number.isFinite(lat) || !Number.isFinite(lng)) fail('Must be a location with lat and lng');
+      if (lat < -90 || lat > 90) fail('Latitude must be between -90 and 90');
+      if (lng < -180 || lng > 180) fail('Longitude must be between -180 and 180');
+      return { lat, lng };
+    },
+  },
   relationship: {
     group: 'relationship',
     parse: (v) => {
@@ -110,6 +121,7 @@ export const OPERATORS = {
   choice: ['eq', 'ne', 'in', 'notIn', 'empty', 'notEmpty'],
   multi: ['contains', 'notContains', 'empty', 'notEmpty'],
   relationship: ['eq', 'ne', 'in', 'empty', 'notEmpty'],
+  location: ['empty', 'notEmpty'],
 };
 
 export const operatorsFor = (type) => OPERATORS[TYPES[type].group];

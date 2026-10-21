@@ -6,6 +6,10 @@ import WorkspacesPage from '../features/workspaces/WorkspacesPage';
 import WorkspaceHomePage from '../features/workspaces/WorkspaceHomePage';
 import DataformPage from '../features/records/DataformPage';
 import DataformSettingsPage from '../features/dataforms/DataformSettingsPage';
+import ReportsPage from '../features/analytics/ReportsPage';
+import ReportEditorPage from '../features/analytics/ReportEditorPage';
+import DashboardsPage from '../features/analytics/DashboardsPage';
+import DashboardPage from '../features/analytics/DashboardPage';
 import TeamPage from '../features/users/TeamPage';
 import { AccountSettingsPage, ProfilePage } from '../features/settings/SettingsPages';
 import { EmptyState } from '../components/common';
@@ -22,6 +26,11 @@ export default function AppRoutes() {
           <Route path="/w/:workspaceId" element={<WorkspaceHomePage />} />
           <Route path="/w/:workspaceId/f/:dataformId" element={<DataformPage />} />
           <Route path="/w/:workspaceId/f/:dataformId/settings" element={<DataformSettingsPage />} />
+          <Route path="/w/:workspaceId/reports" element={<ReportsPage />} />
+          <Route path="/w/:workspaceId/reports/new/:kind" element={<ReportEditorPage />} />
+          <Route path="/w/:workspaceId/reports/:reportId" element={<ReportEditorPage />} />
+          <Route path="/dashboards" element={<DashboardsPage />} />
+          <Route path="/dashboards/:dashboardId" element={<DashboardPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/settings/account" element={<AccountSettingsPage />} />
           <Route path="/settings/profile" element={<ProfilePage />} />

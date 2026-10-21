@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Autocomplete, FormControlLabel, FormHelperText, MenuItem, Switch, TextField } from '@mui/material';
+import { Autocomplete, FormControlLabel, FormHelperText, MenuItem, Stack, Switch, TextField } from '@mui/material';
 import { Controller } from 'react-hook-form';
 import useDebounce from '../../hooks/useDebounce';
 import { useQueryRecordsQuery } from './recordsApi';
@@ -67,6 +67,17 @@ export default function FieldInput({ field, control, errors, disabled, refs }) {
                 renderInput={(params) => <TextField {...params} label={field.label} required={field.required} error={!!error} helperText={error?.message || field.description || undefined} />}
               />
             );
+          case 'location': {
+            const v = rhf.value ?? { lat: '', lng: '' };
+            const lat = error?.lat ?? error;
+            const lng = error?.lng;
+            return (
+              <Stack direction="row" spacing={1.5}>
+                <TextField label={`${field.label}: latitude`} type="number" value={v.lat} onChange={(e) => rhf.onChange({ ...v, lat: e.target.value })} disabled={disabled} fullWidth required={field.required} error={!!lat} helperText={lat?.message || field.description || undefined} slotProps={{ htmlInput: { step: 'any', min: -90, max: 90 } }} />
+                <TextField label="Longitude" type="number" value={v.lng} onChange={(e) => rhf.onChange({ ...v, lng: e.target.value })} disabled={disabled} fullWidth required={field.required} error={!!lng} helperText={lng?.message} slotProps={{ htmlInput: { step: 'any', min: -180, max: 180 } }} />
+              </Stack>
+            );
+          }
           case 'relationship':
             return (
               <RecordPicker

@@ -10,6 +10,9 @@ import accountRoutes from './modules/accounts/account.routes.js';
 import userRoutes from './modules/users/user.routes.js';
 import dataformRoutes from './modules/dataforms/dataform.routes.js';
 import recordRoutes from './modules/records/record.routes.js';
+import viewRoutes from './modules/views/view.routes.js';
+import reportRoutes, { analyzeRouter } from './modules/analytics/analytics.routes.js';
+import dashboardRoutes from './modules/analytics/dashboard.routes.js';
 import workspaceRoutes from './modules/workspaces/workspace.routes.js';
 
 export function createApp() {
@@ -32,7 +35,11 @@ export function createApp() {
   app.use('/api/v1/users', userRoutes);
   app.use('/api/v1/workspaces', workspaceRoutes);
   app.use('/api/v1/dataforms/:id/records', recordRoutes);
+  app.use('/api/v1/dataforms/:id/views', viewRoutes);
+  app.use('/api/v1/dataforms/:id/analyze', analyzeRouter);
   app.use('/api/v1/dataforms', dataformRoutes);
+  app.use('/api/v1/reports', reportRoutes);
+  app.use('/api/v1/dashboards', dashboardRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

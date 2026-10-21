@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 export const TYPE_LABELS = {
   text: 'Text', textarea: 'Long text', email: 'Email', url: 'URL', phone: 'Phone', integer: 'Whole number', decimal: 'Decimal',
-  boolean: 'Yes / No', date: 'Date', datetime: 'Date & time', dropdown: 'Dropdown', multiselect: 'Multi-select', relationship: 'Relationship',
+  boolean: 'Yes / No', date: 'Date', datetime: 'Date & time', dropdown: 'Dropdown', multiselect: 'Multi-select', relationship: 'Relationship', location: 'Location (map)',
 };
 
 export const OPERATOR_LABELS = {
@@ -19,7 +19,7 @@ export const NO_VALUE_OPERATORS = new Set(['empty', 'notEmpty', 'isTrue', 'isFal
 
 const GROUPS = {
   text: 'string', textarea: 'string', email: 'string', url: 'string', phone: 'string', integer: 'number', decimal: 'number',
-  boolean: 'boolean', date: 'date', datetime: 'datetime', dropdown: 'choice', multiselect: 'multi', relationship: 'relationship',
+  boolean: 'boolean', date: 'date', datetime: 'datetime', dropdown: 'choice', multiselect: 'multi', relationship: 'relationship', location: 'location',
 };
 const OPS = {
   string: ['eq', 'ne', 'contains', 'notContains', 'startsWith', 'empty', 'notEmpty'],
@@ -30,6 +30,7 @@ const OPS = {
   choice: ['eq', 'ne', 'in', 'notIn', 'empty', 'notEmpty'],
   multi: ['contains', 'notContains', 'empty', 'notEmpty'],
   relationship: ['eq', 'ne', 'in', 'empty', 'notEmpty'],
+  location: ['empty', 'notEmpty'],
 };
 export const operatorsFor = (type) => OPS[GROUPS[type]];
 export const groupOf = (type) => GROUPS[type];
@@ -46,6 +47,7 @@ export const formatValue = (field, value) => {
     case 'multiselect': return value.map((v) => optionLabel(field, v)).join(', ');
     case 'decimal': return Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
     case 'integer': return Number(value).toLocaleString();
+    case 'location': return `${value.lat.toFixed(4)}, ${value.lng.toFixed(4)}`;
     default: return String(value);
   }
 };
@@ -55,6 +57,7 @@ export const formatValue = (field, value) => {
 export function toFormValue(field, value) {
   if (field.type === 'boolean') return !!value;
   if (field.type === 'multiselect') return value ?? [];
+  if (field.type === 'location') return { lat: value ? String(value.lat) : '', lng: value ? String(value.lng) : '' };
   if (value === null || value === undefined) return field.type === 'relationship' ? null : '';
   if (field.type === 'datetime') return dayjs(value).format('YYYY-MM-DDTHH:mm');
   if (field.type === 'relationship') return String(value);
@@ -64,6 +67,7 @@ export function toFormValue(field, value) {
 export function toApiValue(field, value) {
   if (field.type === 'boolean') return !!value;
   if (field.type === 'multiselect') return value ?? [];
+  if (field.type === 'location') return value.lat === '' && value.lng === '' ? null : { lat: Number(value.lat), lng: Number(value.lng) };
   if (value === '' || value === null || value === undefined) return null;
   if (field.type === 'integer' || field.type === 'decimal') return Number(value);
   if (field.type === 'datetime') return new Date(value).toISOString();
@@ -84,6 +88,14 @@ function fieldSchema(f) {
   let s;
   if (g === 'boolean') return z.boolean();
   if (g === 'multi') return f.required ? z.array(z.string()).min(1, req) : z.array(z.string());
+  if (g === 'location') {
+    const num = (min, max) => (v) => v === '' || (Number.isFinite(Number(v)) && Number(v) >= min && Number(v) <= max);
+    return z.object({ lat: z.string(), lng: z.string() })
+      .refine((v) => num(-90, 90)(v.lat), { message: 'Latitude must be between -90 and 90', path: ['lat'] })
+      .refine((v) => num(-180, 180)(v.lng), { message: 'Longitude must be between -180 and 180', path: ['lng'] })
+      .refine((v) => (v.lat === '') === (v.lng === ''), { message: 'Enter both latitude and longitude', path: ['lat'] })
+      .refine((v) => !f.required || v.lat !== '', { message: req, path: ['lat'] });
+  }
   if (g === 'relationship') return f.required ? z.string({ error: req }).min(1, req) : z.string().nullable();
 
   s = z.string();

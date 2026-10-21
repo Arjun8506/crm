@@ -2,7 +2,7 @@
 
 A multi-tenant CRM platform on the MERN stack. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the roadmap, architecture decisions and what is and is not built.
 
-**Status: Phases 1-2 complete.** Foundation (auth, accounts, workspaces, roles, MUI shell, themes) plus the dynamic data platform (dataforms, custom fields, records, relationships, table view, search/sort/filter, bulk actions, history). Views, reports, workflows etc. are later phases.
+**Status: Phases 1-3 complete.** Foundation (auth, accounts, workspaces, roles, MUI shell, themes), the dynamic data platform (dataforms, custom fields, records, relationships, search/sort/filter, bulk actions, history) and advanced views and analytics (table, cards, Kanban, calendar and map views, saved views, reports, grouped table analyzer, dashboards, CSV export). Collaboration, workflows, imports etc. are later phases.
 
 ## Layout
 Two independent projects with their own `package.json` and `node_modules`. There is no root package.json.
@@ -47,6 +47,7 @@ Open http://localhost:5173.
 
 ## Other commands
 - `backend`: `npm test` (integration tests on a throwaway in-memory DB, never your configured one), `npm run lint`, `npm start`
+- `backend`: `npm run backfill` upgrades records created before Phase 3 (adds the Kanban ordering field). Safe to repeat. Only needed for a database you seeded earlier and want to keep.
 - `frontend`: `npm run build`, `npm run lint`
 
 ## API (v1)
@@ -66,6 +67,13 @@ Base path `/api/v1`. Errors use `{ "error": { "code", "message", "details?" } }`
 | `POST /dataforms/:id/records/query` | Paginated records: `{ page, limit, sort: "key:asc", q, filter }` |
 | `POST /dataforms/:id/records`; `GET, PATCH, DELETE /dataforms/:id/records/:recordId`; `POST .../:recordId/copy`; `GET .../:recordId/history` | Record CRUD, duplicate, audit history |
 | `POST /dataforms/:id/records/bulk` | `{ action: "update"\|"delete", ids (max 200), data? }` |
+
+| `POST /dataforms/:id/records/:recordId/move` | Kanban: `{ field, value, beforeId?, afterId? }` changes stage and persists the card's position |
+| `POST /dataforms/:id/records/export` | CSV download of the filtered/sorted records (visible columns only, formula-injection safe, max 50,000 rows) |
+| `GET, POST /dataforms/:id/views`; `PATCH, DELETE .../views/:viewId` | Saved personal or shared views (table, cards, board, calendar, map) |
+| `POST /dataforms/:id/analyze` | Grouped table analyzer: `{ groupBy: [{field, interval?}] (max 3), metrics: [{op, field?}], filter, q, page, limit }`. Rows include a `drill` filter |
+| `GET, POST /reports?workspaceId=`; `GET, PATCH, DELETE /reports/:id` | Saved list reports and analyzer configurations |
+| `GET, POST /dashboards`; `GET, PUT, DELETE /dashboards/:id`; `POST /dashboards/:id/widgets/:widgetId/data` | Account and personal dashboards; widget data is computed per viewer |
 
 **Filter format** (validated and compiled server-side; unknown fields/operators are rejected):
 ```json

@@ -2,7 +2,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../../middleware/auth.js';
 import { objectId, validate } from '../../middleware/validate.js';
-import { conflict, notFound } from '../../utils/errors.js';
+import { badRequest, conflict, notFound } from '../../utils/errors.js';
+import { ValueError, parseValue } from '../dataforms/fieldTypes.js';
+import { toCsv } from './csv.js';
 import { FieldDefinition } from '../dataforms/dataform.model.js';
 import { loadDataform } from '../dataforms/dataform.service.js';
 import { RecordHistory, RecordModel } from './record.model.js';
@@ -74,6 +76,61 @@ router.post('/', validate({ params: idParams, body: dataBody }), async (req, res
   await writeHistory([{ account: dataform.account, dataform: dataform._id, record: record._id, action: 'create', user: req.auth.userId, changes: diff({}, data) }]);
   res.status(201).json({ record, refs: await resolveRefs(req.auth, dataform, fields, [record]) });
 });
+
+// Streams matching records as CSV. Honours list visibility and escapes formula-injection prefixes.
+router.post(
+  '/export',
+  validate({
+    params: idParams,
+    body: z.object({
+      q: z.string().max(100).optional(), sort: z.string().max(60).optional(), filter: filterSchema.optional(),
+      columns: z.array(z.string().max(60)).max(100).optional(),
+    }),
+  }),
+  async (req, res) => {
+    const { dataform } = await loadDataform(req);
+    const fields = (await loadFields(dataform._id)).filter((f) => f.visibility.list);
+    const chosen = req.body.columns ? req.body.columns.map((k) => fields.find((f) => f.key === k)).filter(Boolean) : fields;
+    const parts = [{ account: dataform.account, dataform: dataform._id }];
+    const search = compileSearch(req.body.q, fields);
+    const filter = compileFilter(req.body.filter, fields);
+    if (search) parts.push(search);
+    if (filter) parts.push(filter);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${dataform.slug}.csv"`);
+    await toCsv({ res, auth: req.auth, dataform, fields: chosen, query: { $and: parts }, sort: compileSort(req.body.sort, fields) });
+  },
+);
+
+router.post(
+  '/:recordId/move',
+  validate({
+    params: recordParams,
+    body: z.object({ field: z.string().max(60), value: z.string().max(80), beforeId: objectId.optional(), afterId: objectId.optional() }),
+  }),
+  async (req, res) => {
+    const { dataform } = await writable(req);
+    const record = await findRecord(req, dataform);
+    const fields = await loadFields(dataform._id);
+    const stage = fields.find((f) => f.key === req.body.field);
+    if (!stage || stage.type !== 'dropdown' || stage.readOnly || !stage.visibility.edit) throw badRequest('Cards can only be moved between the stages of an editable dropdown field');
+    let value;
+    try { value = parseValue(stage, req.body.value); } catch (e) { if (e instanceof ValueError) throw badRequest(e.message); throw e; }
+
+    const rankOf = async (id) => (id ? (await RecordModel.findOne({ _id: id, account: dataform.account, dataform: dataform._id }).select('rank').lean())?.rank : undefined);
+    const [next, prev] = await Promise.all([rankOf(req.body.beforeId), rankOf(req.body.afterId)]);
+    record.rank = next !== undefined && prev !== undefined ? (prev + next) / 2 : next !== undefined ? next - 1000 : prev !== undefined ? prev + 1000 : Date.now();
+
+    const changes = diff(record.data, { [stage.key]: value });
+    record.data = { ...record.data, [stage.key]: value };
+    record.markModified('data');
+    record.updatedBy = req.auth.userId;
+    await record.save();
+    await writeHistory(changes.length ? [{ account: dataform.account, dataform: dataform._id, record: record._id, action: 'update', user: req.auth.userId, changes }] : []);
+    res.json({ record });
+  },
+);
 
 router.post('/bulk', validate({
   params: idParams,

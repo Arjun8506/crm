@@ -124,8 +124,8 @@ export function compileSearch(q, fields) {
 
 export function compileSort(sort, fields) {
   const [key, dir] = String(sort || 'createdAt:desc').split(':');
-  const sortable = new Set(['createdAt', 'updatedAt', ...fields.filter((f) => !['multiselect', 'textarea'].includes(f.type)).map((f) => f.key)]);
+  const sortable = new Set(['createdAt', 'updatedAt', 'rank', ...fields.filter((f) => !['multiselect', 'textarea', 'location'].includes(f.type)).map((f) => f.key)]);
   if (!sortable.has(key)) throw badRequest(`Cannot sort by ${key}`);
-  const path = key === 'createdAt' || key === 'updatedAt' ? key : `data.${key}`;
+  const path = ['createdAt', 'updatedAt', 'rank'].includes(key) ? key : `data.${key}`;
   return { [path]: dir === 'asc' ? 1 : -1, _id: 1 };
 }

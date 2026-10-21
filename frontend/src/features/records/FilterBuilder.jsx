@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddRounded';
 import CloseIcon from '@mui/icons-material/CloseRounded';
+import dayjs from 'dayjs';
 import { RecordPicker } from './FieldInput';
 import { NO_VALUE_OPERATORS, OPERATOR_LABELS, groupOf, operatorsFor } from './fieldUtils';
 
@@ -36,6 +37,15 @@ export function serialize(node, fieldsByKey) {
     if (!Array.isArray(value) || value.length !== 2 || value.some((v) => v === null)) return null;
   } else if (value === null || (Array.isArray(value) && value.length === 0)) return null;
   return { field: node.field, operator: node.operator, value };
+}
+
+// API filter tree -> editable draft tree (the inverse of serialize), used when a saved filter is re-opened.
+export function deserialize(node, fields) {
+  if (!node) return null;
+  if (node.conditions) return { id: ++uid, op: node.op, conditions: node.conditions.map((c) => deserialize(c, fields)) };
+  const f = [...fields, ...BUILTIN].find((x) => x.key === node.field);
+  const local = (v) => (f?.type === 'datetime' && v ? dayjs(v).format('YYYY-MM-DDTHH:mm') : typeof v === 'number' ? String(v) : (v ?? ''));
+  return { id: ++uid, field: node.field, operator: node.operator, value: Array.isArray(node.value) ? node.value.map(local) : local(node.value) };
 }
 
 export const countConditions = (node) => (node?.conditions ? node.conditions.reduce((n, c) => n + countConditions(c), 0) : node ? 1 : 0);

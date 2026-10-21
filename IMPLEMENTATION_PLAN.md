@@ -59,8 +59,33 @@ Two independent projects: `frontend/` (Vite React SPA) and `backend/` (Express A
 - Custom field indexes are not created automatically; add them when a dataform grows large
 - No automated frontend component or e2e tests in the repo yet (the browser check was a one-off script)
 
+## Phase 3: Advanced views and analytics (DONE)
+- [x] Views on every dataform: table (column visibility persisted in views), cards, Kanban board, calendar, map
+- [x] Kanban: stages are the options of any dropdown field; drag and drop between and within columns with persisted fractional ranking, optimistic updates, and a keyboard-accessible "move to" menu
+- [x] Saved views (personal and shared) holding layout, search, filter, sort and display options; editors can share, owners or workspace admins can curate
+- [x] Location field type (lat/lng, validated) plotted on a Leaflet map. Gated by the plan entitlement `locationFields` (off for the free plan)
+- [x] Reports: saved list reports (columns, filters, sort) and saved analyzer configurations, private or shared
+- [x] Grouped Table Analyzer: up to 3 grouping levels; text, dropdown, boolean, date, date-time, relationship, whole-number and multi-select (one group per tag) groups; day/week/month/quarter/year buckets; count/sum/avg/min/max; group pagination; totals; drill-down to the exact source records
+- [x] Dashboards: account-wide (admins edit) and personal; KPI, chart (bar, line, donut), record list and saved-report widgets; width/height presets and reordering; each widget computed server-side with the viewer's own access
+- [x] CSV export of any filtered list (respects hidden columns, escapes spreadsheet formulas, streams up to 50,000 rows)
+- [x] Seed: Acme gets company locations, 5 shared views, 3 reports and a "Sales overview" dashboard
+- [x] Tests: 44 backend tests (15 new). Verified in Chrome via Playwright: dashboard charts (light and dark), Kanban drag and drop with persistence, cards, calendar, map, saved views, analyzer with drill-down, CSV download, with zero console errors
+
+### Decisions
+- Views, reports and dashboards are stored configurations. Nothing is cached, and every read goes through the same authorization and filter engine as the records API, so a shared report or dashboard can never show data the viewer cannot open (covered by tests, including a private workspace).
+- Kanban uses a per-record fractional `rank` rather than an array on the dataform, so a card move is a single-document write. Existing databases need `npm run backfill` once.
+- Analyzer date buckets use MongoDB `$dateTrunc` (UTC, weeks start Monday). The analyzer response carries a ready-made drill-down filter per row, so the client never reconstructs date ranges.
+- Charts use the validated categorical palette in fixed slot order with a separately stepped dark set, one axis only, and a table/summary fallback in each chart's accessible label.
+
+### Not done in Phase 3 (honest list)
+- Scheduled report subscriptions and emailed reports (needs the job queue and email adapter, Phase 5/6)
+- Dashboard widgets for My Tasks, My Discussions and Reminders (need Phase 4), activity summaries, drag-to-resize and drag-to-reorder widgets (size presets and move buttons instead)
+- Conditional formatting, relationship-derived values, inline filter chips, subscriptions that notify on matching records, and global search across attachments
+- Report grouping inside list reports (use the analyzer), pivot tables with column groups, stacked/multi-series charts (single-measure charts only, by design for the first version)
+- Map: no clustering for very large sets (capped at 200 markers per view), tiles come from the public OpenStreetMap server
+- Calendar: month view only, no create-by-click or drag to reschedule
+
 ## Next phases
-3. Views (card/kanban/calendar/map), saved views, reports, grouped analyzer, dashboards.
 4. Collaboration: comments, tasks, notifications, attachments, Socket.IO.
 5. Workflows and communication adapters.
 6. API docs (OpenAPI), webhooks, CSV import/export, public forms/shares.

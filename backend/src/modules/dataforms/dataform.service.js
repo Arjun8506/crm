@@ -1,5 +1,6 @@
-import { badRequest, conflict, notFound } from '../../utils/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../../utils/errors.js';
 import { slugify } from '../../utils/slug.js';
+import { Account } from '../accounts/account.model.js';
 import { RecordModel } from '../records/record.model.js';
 import { workspaceAccess } from '../workspaces/access.js';
 import { Dataform, FieldDefinition } from './dataform.model.js';
@@ -81,6 +82,10 @@ export async function addField(dataform, input) {
   const count = await FieldDefinition.countDocuments({ dataform: dataform._id });
   if (count >= MAX_FIELDS) throw conflict(`A dataform can have at most ${MAX_FIELDS} fields`);
   if (await FieldDefinition.exists({ dataform: dataform._id, key: input.key })) throw conflict('A field with this key already exists');
+  if (input.type === 'location') {
+    const account = await Account.findById(dataform.account).lean();
+    if (!account?.entitlements?.locationFields) throw forbidden('Location fields are not included in your plan');
+  }
 
   const f = await normalizeField(dataform, input);
   const last = await FieldDefinition.findOne({ dataform: dataform._id }).sort({ order: -1 }).lean();

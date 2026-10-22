@@ -23,6 +23,7 @@ import TaskIcon from '@mui/icons-material/TaskAltRounded';
 import BellIcon from '@mui/icons-material/NotificationsNoneRounded';
 import AutoIcon from '@mui/icons-material/AutoFixHighOutlined';
 import PlugIcon from '@mui/icons-material/PowerOutlined';
+import CodeIcon from '@mui/icons-material/CodeRounded';
 
 function NavItem({ to, icon, label, collapsed, end, onClick }) {
   const item = (
@@ -71,6 +72,7 @@ function SidebarContent({ collapsed, onNavigate }) {
         {!collapsed && <ListSubheader disableSticky sx={{ bgcolor: 'transparent', lineHeight: '28px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Administration</ListSubheader>}
         <NavItem to="/team" icon={<PeopleIcon />} label={canManageUsers ? 'Team & roles' : 'Team'} collapsed={collapsed} onClick={onNavigate} />
         {canManageUsers && <NavItem to="/settings/integrations" icon={<PlugIcon />} label="Integrations" collapsed={collapsed} onClick={onNavigate} />}
+        {canManageUsers && <NavItem to="/settings/developers" icon={<CodeIcon />} label="Developers" collapsed={collapsed} onClick={onNavigate} />}
         <NavItem to="/settings/account" icon={<BusinessIcon />} label="Account & usage" collapsed={collapsed} onClick={onNavigate} />
         <NavItem to="/settings/profile" icon={<PersonIcon />} label="Profile & preferences" collapsed={collapsed} onClick={onNavigate} />
       </List>

@@ -17,6 +17,9 @@ import WorkflowEditorPage from '../features/automation/WorkflowEditorPage';
 import IntegrationsPage from '../features/automation/IntegrationsPage';
 import TeamPage from '../features/users/TeamPage';
 import { AccountSettingsPage, ProfilePage } from '../features/settings/SettingsPages';
+import DevelopersPage from '../features/developers/DevelopersPage';
+import PublicFormPage from '../features/publicforms/PublicFormPage';
+import PublicSharePage from '../features/publicforms/PublicSharePage';
 import { EmptyState } from '../components/common';
 
 export default function AppRoutes() {
@@ -24,6 +27,8 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/f/:token" element={<PublicFormPage />} />
+      <Route path="/s/:token" element={<PublicSharePage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route index element={<Navigate to="/workspaces" replace />} />
@@ -43,6 +48,7 @@ export default function AppRoutes() {
           <Route path="/w/:workspaceId/workflows/new" element={<WorkflowEditorPage />} />
           <Route path="/w/:workspaceId/workflows/:workflowId" element={<WorkflowEditorPage />} />
           <Route path="/settings/integrations" element={<IntegrationsPage />} />
+          <Route path="/settings/developers" element={<DevelopersPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/settings/account" element={<AccountSettingsPage />} />
           <Route path="/settings/profile" element={<ProfilePage />} />

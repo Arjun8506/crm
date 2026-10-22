@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate, requirePermission } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
 import { notFound } from '../../utils/errors.js';
+import { audit } from '../audit/audit.js';
 import { Account } from './account.model.js';
 import { Workspace } from '../workspaces/workspace.model.js';
 import { Membership } from '../users/membership.model.js';
@@ -38,6 +39,7 @@ router.patch(
     if (name) $set.name = name;
     for (const [k, v] of Object.entries(settings || {})) $set[`settings.${k}`] = v;
     const account = await Account.findByIdAndUpdate(req.auth.accountId, { $set }, { returnDocument: 'after', runValidators: true }).lean();
+    await audit(req, 'account.updated', { type: 'account', id: req.auth.accountId, summary: Object.keys($set).join(', ') });
     res.json({ account });
   },
 );

@@ -21,6 +21,14 @@ import integrationRoutes from './modules/integrations/integration.routes.js';
 import communicationRoutes, { recordInteractionRouter } from './modules/interactions/interaction.routes.js';
 import webhookRoutes from './modules/interactions/webhook.routes.js';
 import workflowRoutes from './modules/workflows/workflow.routes.js';
+import apiKeyRoutes from './modules/apikeys/apikey.routes.js';
+import outboundRoutes from './modules/outbound/webhook.routes.js';
+import auditRoutes from './modules/audit/audit.js';
+import openapiRoutes from './modules/openapi/openapi.routes.js';
+import publicRoutes from './modules/publicforms/public.routes.js';
+import { formAdminRouter, shareAdminRouter } from './modules/publicforms/form.routes.js';
+import exportRoutes from './modules/imports/export.routes.js';
+import importRoutes, { dataformImportRouter } from './modules/imports/import.routes.js';
 import workspaceRoutes from './modules/workspaces/workspace.routes.js';
 
 export function createApp() {
@@ -42,10 +50,13 @@ export function createApp() {
   app.use('/api/v1/accounts', accountRoutes);
   app.use('/api/v1/users', userRoutes);
   app.use('/api/v1/workspaces', workspaceRoutes);
+  app.use('/api/v1/dataforms/:id/records/:recordId/shares', shareAdminRouter);
   app.use('/api/v1/dataforms/:id/records/:recordId', recordCommentRouter);
   app.use('/api/v1/dataforms/:id/records/:recordId', recordAttachmentRouter);
   app.use('/api/v1/dataforms/:id/records/:recordId', recordInteractionRouter);
   app.use('/api/v1/dataforms/:id/records', recordRoutes);
+  app.use('/api/v1/dataforms/:id/imports', dataformImportRouter);
+  app.use('/api/v1/dataforms/:id/forms', formAdminRouter);
   app.use('/api/v1/dataforms/:id/views', viewRoutes);
   app.use('/api/v1/dataforms/:id/analyze', analyzeRouter);
   app.use('/api/v1/dataforms', dataformRoutes);
@@ -59,6 +70,13 @@ export function createApp() {
   app.use('/api/v1/communications', communicationRoutes);
   app.use('/api/v1/workflows', workflowRoutes);
   app.use('/api/v1/webhooks', webhookRoutes);
+  app.use('/api/v1/api-keys', apiKeyRoutes);
+  app.use('/api/v1/outbound-webhooks', outboundRoutes);
+  app.use('/api/v1/audit', auditRoutes);
+  app.use('/api/v1', openapiRoutes);
+  app.use('/api/v1/public', publicRoutes);
+  app.use('/api/v1/imports', importRoutes);
+  app.use('/api/v1/exports', exportRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

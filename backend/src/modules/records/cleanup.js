@@ -1,4 +1,6 @@
 import * as storage from '../../providers/storage.js';
+import { purgeJobsFor } from '../imports/cleanup.js';
+import { PublicForm, PublicShare } from '../publicforms/public.models.js';
 import { Attachment } from '../attachments/attachment.model.js';
 import { Comment, Follow } from '../comments/comment.model.js';
 import { Task } from '../tasks/task.model.js';
@@ -20,24 +22,35 @@ async function purge(filterFor) {
   ]);
 }
 
-export const purgeRecords = (accountId, recordIds) => purge({
+export const purgeRecords = async (accountId, recordIds) => {
+  // A deleted record's public links stop working immediately.
+  await PublicShare.deleteMany({ account: accountId, record: { $in: recordIds } });
+  return purgeFor(accountId, recordIds);
+};
+const purgeFor = (accountId, recordIds) => purge({
   attachment: { account: accountId, record: { $in: recordIds } },
   comment: { account: accountId, record: { $in: recordIds } },
   follow: { account: accountId, record: { $in: recordIds } },
   task: { account: accountId, record: { $in: recordIds } },
 });
 
-export const purgeDataformArtifacts = (accountId, dataformId) => purge({
+export const purgeDataformArtifacts = async (accountId, dataformId) => {
+  await purgeJobsFor({ account: accountId, dataform: dataformId });
+  await Promise.all([PublicForm.deleteMany({ account: accountId, dataform: dataformId }), PublicShare.deleteMany({ account: accountId, dataform: dataformId })]);
+  return purge({
   attachment: { account: accountId, dataform: dataformId },
   comment: { account: accountId, dataform: dataformId },
   follow: { account: accountId, dataform: dataformId },
   task: { account: accountId, dataform: dataformId },
-});
+  });
+};
 
 // Deleting a workspace removes everything inside it, including uploaded file bytes.
 export async function purgeWorkspace(accountId, workspaceId) {
   const forms = await Dataform.find({ account: accountId, workspace: workspaceId }).select('_id').lean();
   const formIds = forms.map((f) => f._id);
+  await purgeJobsFor({ account: accountId, workspace: workspaceId });
+  await Promise.all([PublicForm.deleteMany({ account: accountId, workspace: workspaceId }), PublicShare.deleteMany({ account: accountId, workspace: workspaceId })]);
   const files = await Attachment.find({ account: accountId, workspace: workspaceId }).select('+storageKey').lean();
   await Promise.all(files.map((f) => storage.remove(f.storageKey).catch(() => {})));
   await Promise.all([

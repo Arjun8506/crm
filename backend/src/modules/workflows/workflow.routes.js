@@ -13,6 +13,7 @@ import { cancelJobs } from '../queue/queue.js';
 import { RecordModel } from '../records/record.model.js';
 import { User } from '../users/user.model.js';
 import { LEVEL, workspaceAccess } from '../workspaces/access.js';
+import { audit } from '../audit/audit.js';
 import { executeExecution } from './engine.js';
 import { nextRun } from './schedule.js';
 import { validateWorkflow, workflowBody } from './schema.js';
@@ -113,6 +114,7 @@ router.post('/', validate({ body: workflowBody }), async (req, res) => {
     account: dataform.account, workspace: dataform.workspace, dataform: dataform._id, name: def.name, description: def.description, trigger: def.trigger,
     conditions: def.conditions, actions: def.actions, onError: def.onError, enabled: false, createdBy: req.auth.userId, webhookSecret: encrypt(crypto.randomBytes(24).toString('hex')),
   });
+  await audit(req, 'workflow.created', { type: 'workflow', id: workflow._id, summary: workflow.name });
   res.status(201).json({ workflow: present(await Workflow.findById(workflow._id).select('+webhookSecret'), { secret: true }) });
 });
 
@@ -132,6 +134,7 @@ router.put('/:id', validate({ params: idParams, body: workflowBody }), async (re
   if (def.trigger.type === 'schedule' && workflow.enabled) workflow.nextRunAt = nextRun(def.trigger.schedule);
   if (def.trigger.type !== 'schedule') workflow.nextRunAt = undefined;
   await workflow.save();
+  await audit(req, 'workflow.updated', { type: 'workflow', id: workflow._id, summary: `${workflow.name} (v${workflow.version})` });
   res.json({ workflow: present(workflow, { secret: true }) });
 });
 
@@ -141,6 +144,7 @@ router.patch('/:id/enabled', validate({ params: idParams, body: z.object({ enabl
   workflow.enabled = req.body.enabled;
   workflow.nextRunAt = req.body.enabled && workflow.trigger.type === 'schedule' ? nextRun(workflow.trigger.schedule) : undefined;
   await workflow.save();
+  await audit(req, workflow.enabled ? 'workflow.enabled' : 'workflow.paused', { type: 'workflow', id: workflow._id, summary: workflow.name });
   res.json({ workflow: present(workflow) });
 });
 
@@ -168,6 +172,7 @@ router.delete('/:id', validate({ params: idParams }), async (req, res) => {
   await cancelJobs({ type: 'workflow.execute', 'payload.executionId': { $in: pending.map((p) => String(p._id)) } });
   await WorkflowExecution.updateMany({ _id: { $in: pending.map((p) => p._id) } }, { $set: { status: 'cancelled', finishedAt: new Date(), error: 'The workflow was deleted' } });
   await workflow.deleteOne(); // run history is kept (it records the workflow name)
+  await audit(req, 'workflow.deleted', { type: 'workflow', id: workflow._id, summary: workflow.name });
   res.status(204).end();
 });
 

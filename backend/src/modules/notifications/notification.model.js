@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-export const NOTIFICATION_TYPES = ['mention', 'comment', 'record_update', 'task_assigned', 'task_comment', 'task_reminder', 'task_due', 'task_overdue', 'attachment', 'message_received', 'workflow', 'workflow_failed'];
+export const NOTIFICATION_TYPES = ['mention', 'comment', 'record_update', 'task_assigned', 'task_comment', 'task_reminder', 'task_due', 'task_overdue', 'attachment', 'message_received', 'workflow', 'workflow_failed', 'job_done', 'form_submission'];
 
 const notificationSchema = new mongoose.Schema({
   account: { type: mongoose.Schema.Types.ObjectId, ref: 'Account', required: true },

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ToggleButton, ToggleButtonGroup } from '@mui/material';
-import { Alert, Badge, Box, Button, Card, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, InputAdornment, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Badge, Box, Button, Card, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, InputAdornment, ListItemIcon, ListItemText, Menu, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import { useForm } from 'react-hook-form';
 import { useDispatch } from 'react-redux';
@@ -10,6 +10,12 @@ import FilterIcon from '@mui/icons-material/FilterListRounded';
 import SearchIcon from '@mui/icons-material/SearchRounded';
 import SettingsIcon from '@mui/icons-material/SettingsOutlined';
 import DownloadIcon from '@mui/icons-material/FileDownloadOutlined';
+import UploadIcon from '@mui/icons-material/FileUploadOutlined';
+import FormIcon from '@mui/icons-material/DynamicFormOutlined';
+import MoreIcon from '@mui/icons-material/MoreHorizRounded';
+import ImportDialog from '../dataops/ImportDialog';
+import ExportDialog from '../dataops/ExportDialog';
+import FormsDialog from '../publicforms/FormsDialog';
 import TableViewIcon from '@mui/icons-material/TableRowsOutlined';
 import CardsIcon from '@mui/icons-material/GridViewOutlined';
 import KanbanIcon from '@mui/icons-material/ViewKanbanOutlined';
@@ -86,6 +92,8 @@ export default function DataformPage() {
   const drawer = linkedRecord ? { open: true, recordId: linkedRecord } : drawerState;
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkEdit, setBulkEdit] = useState(false);
+  const [dataMenu, setDataMenu] = useState(null);
+  const [tool, setTool] = useState(null); // 'import' | 'export' | 'forms'
   const [bulk, bulkState] = useBulkRecordsMutation();
 
   const fields = meta?.fields;
@@ -185,7 +193,13 @@ export default function DataformPage() {
           {filterCount > 0 && <Button size="small" onClick={() => { setFilter(null); setDraft(null); resetPage(); }}>Clear filters</Button>}
           <Box sx={{ flex: 1 }} />
           {viewType === 'table' && data && <Typography variant="body2" color="text.secondary">{data.total.toLocaleString()} record{data.total === 1 ? '' : 's'}</Typography>}
-          <Button size="small" color="inherit" startIcon={<DownloadIcon />} onClick={exportCsv}>Export CSV</Button>
+          <Button size="small" color="inherit" startIcon={<MoreIcon />} onClick={(e) => setDataMenu(e.currentTarget)} aria-haspopup="menu">Import / export</Button>
+          <Menu anchorEl={dataMenu} open={!!dataMenu} onClose={() => setDataMenu(null)}>
+            {canWrite && dataform.status !== 'archived' && <MenuItem onClick={() => { setDataMenu(null); setTool('import'); }}><ListItemIcon><UploadIcon fontSize="small" /></ListItemIcon><ListItemText>Import from CSV…</ListItemText></MenuItem>}
+            <MenuItem onClick={() => { setDataMenu(null); exportCsv(); }}><ListItemIcon><DownloadIcon fontSize="small" /></ListItemIcon><ListItemText>Download current view (CSV)</ListItemText></MenuItem>
+            <MenuItem onClick={() => { setDataMenu(null); setTool('export'); }}><ListItemIcon><DownloadIcon fontSize="small" /></ListItemIcon><ListItemText>Export in background (CSV or ZIP with files)…</ListItemText></MenuItem>
+            {access === 'admin' && <MenuItem onClick={() => { setDataMenu(null); setTool('forms'); }}><ListItemIcon><FormIcon fontSize="small" /></ListItemIcon><ListItemText>Public forms…</ListItemText></MenuItem>}
+          </Menu>
         </Stack>
 
         {viewType === 'table' && selectedIds.length > 0 && (
@@ -231,6 +245,9 @@ export default function DataformPage() {
           onApply={(tree, d) => { setFilter(tree); setDraft(d); resetPage(); clearSelection(); setFilterOpen(false); }}
         />
       )}
+      {tool === 'import' && <ImportDialog open dataform={dataform} onClose={() => setTool(null)} />}
+      {tool === 'export' && <ExportDialog open dataform={dataform} params={{ q: q || undefined, filter: filter || undefined, sort: sortString, columns: fields.filter((f) => f.visibility.list && !hidden.includes(f.key)).map((f) => f.key) }} onClose={() => setTool(null)} />}
+      {tool === 'forms' && <FormsDialog open dataform={dataform} onClose={() => setTool(null)} />}
       {drawer.open && <RecordDrawer open dataform={dataform} fields={fields} canWrite={canWrite} canModerate={access === 'admin'} recordId={drawer.recordId} onClose={() => { setDrawer({ open: false, recordId: null }); if (linkedRecord) setSearchParams({}, { replace: true }); }} />}
       {bulkEdit && (
         <BulkEditDialog

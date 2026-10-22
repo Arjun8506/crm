@@ -141,7 +141,35 @@ Two independent projects: `frontend/` (Vite React SPA) and `backend/` (Express A
 - Workflow versions/rollback, import/export of workflows, and a test mode that runs actions without side effects
 - Twilio webhooks need the server reachable from the internet at `PUBLIC_API_URL`; they cannot work on plain localhost
 
+## Phase 6: API, integrations and data operations (DONE)
+- [x] REST API for records: list with filter/sort/search/field selection, query, create, update, delete, bulk, history. OpenAPI 3.1 document at `/api/v1/openapi.json` and an in-app API reference
+- [x] API keys: hashed at rest, shown once, read or read/write scope, optional workspace restriction and expiry, per-key rate limit, revocation, last-used time. Limited to an endpoint allowlist and low roles; writes are attributed to the key in record history and still go through before-save rules
+- [x] Outbound webhooks: record, task, comment and attachment events; HMAC-signed; SSRF-checked at save and at send; retries with backoff and a stable event id; auto-disable after 10 consecutive failures with a notification; delivery log, redelivery, real test ping, secret rotation
+- [x] CSV import: RFC 4180 parser, delimiter detection, column mapping with suggestions, dry run, duplicate handling (skip, update, error) by a chosen field, date formats, relationships matched by name, per-row validation, before-save rules and webhooks per row, progress, cancel, resume after a crash, downloadable file of problem rows
+- [x] CSV and ZIP (with attachments) export as background jobs; list-visibility rules and formula-injection protection apply; files expire after 3 days
+- [x] Public web forms: chosen fields only, optional files, open/close window, response limit, honeypot, minimum-time token, rate limit, notification to chosen people, replaceable link
+- [x] Public record links: chosen fields, read-only, expiring, withdrawable, hashed, uniform "not available" answer, `noindex`
+- [x] Audit log (13-month retention) of credentials, access, automation, webhooks, forms, shares and data operations
+- [x] Frontend: Developers page (keys, webhooks with deliveries, API reference, audit log), import wizard, background export dialog, public forms manager, record share dialog, and the public `/f/:token` and `/s/:token` pages (which never touch the sign-in session)
+- [x] Tests: 215 backend tests (77 new). The OpenAPI test signs in and calls every documented operation to prove the route exists, and checks every operation an API key may call is documented. Verified in Chrome via Playwright, including an anonymous visitor submitting a form and opening, then losing, a shared link
+
+### Decisions
+- API keys deliberately cannot reach users, integrations, workflows, billing or other keys. Convenience is traded for a small blast radius if a key leaks.
+- Webhook payloads contain only list-visible fields, so hiding a field in lists also keeps it out of external systems.
+- Import re-uses the normal write path rather than bulk-inserting. It is slower than a bulk insert, but rules, uniqueness, history and webhooks cannot be bypassed.
+- Public form links are stored readable (admins need to see them again); public record links are stored hashed (shown once), because they grant read access to existing data.
+- Import jobs resume from a per-row checkpoint, so a restart never repeats finished rows.
+
+### Not done in Phase 6 (honest list)
+- Webhooks cannot yet be limited to certain dataforms in the UI (the API supports it), and there is no per-key usage history beyond last-used time
+- OpenAPI covers the integration surface only (records, dataforms, tasks, comments, files, imports/exports, keys, webhooks, audit, public pages), not user, billing or workflow administration; there is no generated client SDK
+- Import has no Excel (.xlsx) support, no saved mapping templates, no custom list separators, and files are limited to 20,000 rows / 10 MB; times without a zone are read as UTC
+- Dry run checks values and duplicates but does not evaluate before-save rules (they could have side effects)
+- Public forms: no CAPTCHA (honeypot, timing and rate limiting only), no conditional questions, no multi-page forms, no relationship questions, and the "value not available" message still lets someone probe whether a unique value exists by trial
+- Public record links share fields only: not comments, files or related records, and there is no password option
+- Export of a very large dataform is capped at 50,000 rows, and a ZIP at 1,000 files / 1 GB
+- Rate limits are per server process (in memory); running several API instances would need a shared store
+
 ## Next phases
-6. API docs (OpenAPI), webhooks, CSV import/export, public forms/shares.
 7. AI provider abstraction, billing, onboarding.
 8. Hardening: performance, accessibility audit, e2e (Playwright), deployment config.

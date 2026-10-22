@@ -21,6 +21,7 @@ export async function usersWithAccess(workspace, userIds) {
 // Ids of every workspace in the caller's account that they may open (used for cross-workspace lists like My Tasks).
 export async function accessibleWorkspaceIds(auth) {
   const filter = { account: auth.accountId };
+  if (auth.apiKey?.workspaces?.length) filter._id = { $in: auth.apiKey.workspaces };
   if (!can(auth.role, 'workspace:admin')) filter.$or = [{ visibility: 'account' }, { 'members.user': auth.userId }];
   return (await Workspace.find(filter).select('_id').lean()).map((w) => w._id);
 }
@@ -28,6 +29,8 @@ export async function accessibleWorkspaceIds(auth) {
 // Resolves the caller's effective level in a workspace (viewer < editor < admin).
 // Unknown / invisible workspaces are reported as 404 so IDs cannot be probed across tenants.
 export async function workspaceAccess(auth, workspaceId, minLevel = 'viewer') {
+  // An API key limited to certain workspaces cannot see any other, and gets the same "not found" as a missing one.
+  if (auth.apiKey?.workspaces?.length && !auth.apiKey.workspaces.includes(String(workspaceId))) throw notFound('Workspace not found');
   const workspace = await Workspace.findOne({ _id: workspaceId, account: auth.accountId });
   if (!workspace) throw notFound('Workspace not found');
 

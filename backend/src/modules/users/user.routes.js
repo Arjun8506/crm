@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate, requirePermission } from '../../middleware/auth.js';
 import { objectId, validate } from '../../middleware/validate.js';
 import { forbidden, notFound } from '../../utils/errors.js';
+import { audit } from '../audit/audit.js';
 import { Membership } from './membership.model.js';
 import { User } from './user.model.js';
 
@@ -53,6 +54,7 @@ router.patch(
     if (String(target._id) === req.auth.membershipId) throw forbidden('You cannot change your own membership');
     Object.assign(target, req.body);
     await target.save();
+    await audit(req, 'member.updated', { type: 'membership', id: target._id, summary: `role ${target.role}, ${target.status}` });
     res.json({ id: target._id, role: target.role, status: target.status });
   },
 );

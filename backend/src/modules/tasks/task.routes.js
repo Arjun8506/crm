@@ -8,6 +8,7 @@ import { Comment } from '../comments/comment.model.js';
 import { excerpt, threadFor, validMentions } from '../comments/comment.service.js';
 import { Dataform } from '../dataforms/dataform.model.js';
 import { notify } from '../notifications/notification.service.js';
+import { dispatchEvent } from '../outbound/events.js';
 import { RecordModel } from '../records/record.model.js';
 import { label } from '../records/record.service.js';
 import { LEVEL, accessibleWorkspaceIds, usersWithAccess, workspaceAccess } from '../workspaces/access.js';
@@ -54,6 +55,8 @@ async function loadTask(req, minLevel = 'viewer') {
 }
 
 const emit = (task) => emitWorkspace(task.workspace, 'task.changed', { taskId: String(task._id) });
+const taskPayload = (t) => ({ task: { id: String(t._id), title: t.title, status: t.status, priority: t.priority, due: t.due ?? null, assignees: t.assignees.map(String), workspaceId: String(t.workspace), recordId: t.record ? String(t.record) : null } });
+const taskEvent = (t, event) => dispatchEvent({ account: t.account, event, dataformId: t.dataform, data: taskPayload(t) });
 
 router.get(
   '/',
@@ -111,6 +114,7 @@ router.post('/', validate({ body: createBody }), async (req, res) => {
   await TaskActivity.create({ account: task.account, task: task._id, user: req.auth.userId, action: 'create' });
   await notify({ account: task.account, recipients: assignees, actor: req.auth.userId, type: 'task_assigned', title: `You were assigned: ${task.title}`, body: task.due ? `Due ${task.due.toISOString().slice(0, 10)}` : '', link: link(task) });
   emit(task);
+  await taskEvent(task, 'task.created');
   res.status(201).json({ task });
 });
 
@@ -153,6 +157,7 @@ router.patch('/:id', validate({ params: idParams, body: updateBody }), async (re
     const added = req.body.assignees ? req.body.assignees.filter((a) => !before.assignees.some((b) => String(b) === a)) : [];
     await notify({ account: task.account, recipients: added, actor: req.auth.userId, type: 'task_assigned', title: `You were assigned: ${task.title}`, link: link(task) });
     emit(task);
+    await taskEvent(task, 'task.updated');
   }
   res.json({ task });
 });
@@ -162,6 +167,7 @@ router.delete('/:id', validate({ params: idParams }), async (req, res) => {
   if (String(task.createdBy) !== req.auth.userId && access.level < LEVEL.admin) throw forbidden('Only the creator or a workspace admin can delete this task');
   await Promise.all([task.deleteOne(), TaskActivity.deleteMany({ task: task._id }), Comment.deleteMany({ task: task._id })]);
   emit(task);
+  await taskEvent(task, 'task.deleted');
   res.status(204).end();
 });
 

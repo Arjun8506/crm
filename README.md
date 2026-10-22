@@ -90,6 +90,17 @@ Base path `/api/v1`. Errors use `{ "error": { "code", "message", "details?" } }`
 | `GET, POST /dataforms/:id/records/:recordId/attachments`; `POST .../attachments/zip` | List, upload (multipart field `file`), bulk ZIP download |
 | `GET /attachments/:id/download` (add `?inline=1` for images); `PATCH, DELETE /attachments/:id` | Authorized download (inline only for verified images), description, delete |
 
+| `GET /openapi.json` | OpenAPI 3.1 description of the integration API (no sign-in needed). Operations an API key may call carry `x-api-key-scope` |
+| `GET /dataforms/:id/records` | Plain REST list: `?page&limit&sort&q&filter=<urlencoded JSON>&fields=a,b` |
+| `GET, POST /api-keys`; `DELETE /api-keys/:id` | API keys (account admins). The `ocrm_…` key is shown once; only its SHA-256 hash is stored |
+| `GET, POST /outbound-webhooks`; `PATCH, DELETE .../:id`; `POST .../:id/rotate-secret`, `/test`; `GET .../:id/deliveries`; `POST .../deliveries/:id/redeliver` | Signed outbound webhooks (account admins) |
+| `GET /audit?action=` | Audit log of credentials, access, automation and data operations (account admins) |
+| `POST /dataforms/:id/imports` (multipart `file`); `GET /dataforms/:id/imports`; `GET /imports/:id`; `POST /imports/:id/start`, `/cancel`; `GET /imports/:id/errors`; `DELETE /imports/:id` | CSV import: upload, preview and suggested mapping, start (or dry run), progress, problem rows as CSV |
+| `POST, GET /exports`; `GET /exports/:id`, `/exports/:id/download`; `DELETE /exports/:id` | Background CSV or ZIP (with attachments) export; files are kept 3 days |
+| `GET, POST /dataforms/:id/forms`; `PATCH, DELETE .../forms/:formId`; `POST .../forms/:formId/regenerate-link` | Public web forms (workspace admins) |
+| `GET, POST /dataforms/:id/records/:recordId/shares`; `DELETE .../shares/:shareId` | Read-only public links to chosen fields of one record (editors) |
+| `GET /public/forms/:token`; `POST /public/forms/:token/submit`; `GET /public/shares/:token` | Visitor endpoints. No sign-in; rate limited; always `noindex, no-store` |
+
 **Real-time (Socket.IO, same origin as the API).** Connect with `{ auth: { token: <access token> } }`, then `emit('subscribe', { workspaceId }, ack)` for each workspace; the server only joins rooms you may open. Events carry ids only (`record.changed`, `comment.changed`, `task.changed`, `attachment.changed`, `notification.new`): refetch through the REST API.
 
 **Filter format** (validated and compiled server-side; unknown fields/operators are rejected):
@@ -115,7 +126,12 @@ Access levels per workspace: viewer (read), editor (records), admin (dataform st
 - Integration credentials are encrypted at rest (AES-256-GCM, key from `SECRETS_KEY`) and are never returned by the API. Twilio callbacks must carry a valid `X-Twilio-Signature`; inbound email needs the shared `X-Webhook-Secret`.
 - Workflows run with the identity of the user who created them. Editors can trigger a manual workflow but cannot change what it does.
 - A channel that is not configured never pretends to send: the API answers 409 `NOT_CONFIGURED`, workflow actions fail with a clear message, and a message only becomes "sent" when the provider accepts it ("delivered" only comes from a provider callback).
+- **API keys** are limited to an endpoint allowlist (read and record writes) and to the roles viewer or member, so a leaked key can never administer the account. Keys can be restricted to workspaces, expire, and be revoked; each key has its own rate limit; changes made with a key show as `API key: <name>` in record history. Before-save rules still apply to writes made with a key.
+- **Outbound webhooks** use the same SSRF protection as workflow webhooks, deliver only fields visible in lists, retry with backoff (same event id every time, so receivers can de-duplicate), and switch themselves off after 10 failed deliveries in a row, telling their owner.
+- **CSV imports** go through the same validation, uniqueness checks, before-save rules, history and webhooks as typing a record in. An uploaded file is deleted after 30 days; exports after 3. A running import resumes from its last saved row if the server restarts.
+- **Public forms** expose only the fields an admin ticked (never relationship fields), use an unguessable link that can be replaced, and are protected by a hidden honeypot field, a signed minimum-time token, a per-IP rate limit and an optional response limit. A unique-value clash is reported as "not available" rather than saying the record exists.
+- **Public record links** store only a hash of the link, show only the chosen list-visible fields read-only, expire (max 90 days), can be withdrawn, and give one identical "not available" answer for unknown, expired, withdrawn and deleted.
 - `backend/.env` is git-ignored. Never commit database credentials.
 
 ## Known limitations
-See the plan. Notably: password reset, email verification, invitations, search and notifications are not implemented yet. Their UI entry points are either absent or clearly disabled.
+See the plan. Notably: password reset, email verification, invitations and global search are not implemented yet. Their UI entry points are either absent or clearly disabled.

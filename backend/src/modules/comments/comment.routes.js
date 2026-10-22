@@ -7,6 +7,7 @@ import { emitWorkspace } from '../../sockets/index.js';
 import { Dataform } from '../dataforms/dataform.model.js';
 import { loadDataform } from '../dataforms/dataform.service.js';
 import { notify } from '../notifications/notification.service.js';
+import { dispatchEvent } from '../outbound/events.js';
 import { LEVEL, workspaceAccess } from '../workspaces/access.js';
 import { Comment, Follow } from './comment.model.js';
 import { autoFollow, excerpt, followersOf, recordLabel, threadFor, validMentions } from './comment.service.js';
@@ -53,6 +54,7 @@ recordCommentRouter.post('/comments', validate({ params: recordParams, body: com
     title: `${author} commented on ${name}`, body: excerpt(req.body.body), link,
   });
   emitWorkspace(dataform.workspace, 'comment.changed', { dataformId: String(dataform._id), recordId: req.params.recordId });
+  await dispatchEvent({ account: dataform.account, event: 'comment.created', dataformId: dataform._id, data: { commentId: String(comment._id), recordId: String(req.params.recordId), dataformId: String(dataform._id), workspaceId: String(dataform.workspace), author: String(req.auth.userId), body: comment.body, parent: comment.parent ? String(comment.parent) : null } });
   res.status(201).json({ comment });
 });
 

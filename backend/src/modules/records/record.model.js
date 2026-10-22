@@ -31,6 +31,8 @@ const historySchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   // Set when the change was made by a workflow rather than directly by the user.
   workflow: { type: mongoose.Schema.Types.ObjectId, ref: 'Workflow' },
+  // Where a change came from when it was not typed in by a person: 'import', 'form:<name>'.
+  source: { type: String, maxlength: 80 },
   // Bounded per entry; one entry per save, so no unbounded array growth on the record itself.
   changes: { type: [{ _id: false, field: String, from: mongoose.Schema.Types.Mixed, to: mongoose.Schema.Types.Mixed }], default: [] },
   at: { type: Date, default: Date.now },

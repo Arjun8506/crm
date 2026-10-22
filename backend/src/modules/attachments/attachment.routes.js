@@ -12,32 +12,13 @@ import { Account } from '../accounts/account.model.js';
 import { autoFollow, followersOf, recordLabel } from '../comments/comment.service.js';
 import { loadDataform } from '../dataforms/dataform.service.js';
 import { notify } from '../notifications/notification.service.js';
+import { dispatchEvent } from '../outbound/events.js';
 import { LEVEL, workspaceAccess } from '../workspaces/access.js';
 import { Attachment } from './attachment.model.js';
+import { saveAttachment } from './attachment.service.js';
 
-const BLOCKED_EXT = new Set(['exe', 'bat', 'cmd', 'com', 'scr', 'msi', 'dll', 'sh', 'ps1', 'vbs', 'jar', 'app', 'apk']);
-const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const MAX_ZIP_FILES = 100;
 const MAX_ZIP_BYTES = 500 * 1024 * 1024;
-
-// Real content check, not just the declared Content-Type: only genuine raster images are ever rendered inline.
-function sniffImage(buf) {
-  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
-  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
-  if (buf.length >= 6 && ['GIF87a', 'GIF89a'].includes(buf.subarray(0, 6).toString('latin1'))) return 'image/gif';
-  if (buf.length >= 12 && buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
-  return null;
-}
-
-// Strips directories, control characters and characters that are unsafe in file names or headers.
-function cleanName(name) {
-  let out = '';
-  for (const ch of path.basename(String(name))) {
-    const code = ch.codePointAt(0);
-    out += code < 32 || code === 127 || '"\\/:*?<>|'.includes(ch) ? '_' : ch;
-  }
-  return out.replace(/^\.+/, '').slice(0, 200) || 'file';
-}
 
 // ---- record attachments: mounted at /dataforms/:id/records/:recordId/attachments ----
 export const recordAttachmentRouter = Router({ mergeParams: true });
@@ -72,27 +53,16 @@ recordAttachmentRouter.post('/attachments', validate({ params: recordParams }), 
   const { dataform, access, record, recordName } = req.upload;
   const file = req.file;
   if (!file) throw badRequest('Choose a file to upload (form field "file")');
-  const filename = cleanName(file.originalname);
-  const ext = path.extname(filename).slice(1).toLowerCase();
-  if (BLOCKED_EXT.has(ext)) throw badRequest(`.${ext} files cannot be uploaded`);
-  if (file.size === 0) throw badRequest('The file is empty');
-
-  const sniffed = sniffImage(file.buffer);
-  const previewable = !!sniffed && sniffed === file.mimetype && IMAGE_TYPES.has(sniffed);
-  const storageKey = storage.newKey(dataform.account);
-  await storage.put(storageKey, file.buffer);
-  const description = typeof req.body.description === 'string' ? req.body.description.slice(0, 300) : '';
-  const attachment = await Attachment.create({
-    account: dataform.account, workspace: dataform.workspace, dataform: dataform._id, record: record._id, uploader: req.auth.userId,
-    filename, mimeType: previewable ? sniffed : (file.mimetype || 'application/octet-stream').slice(0, 120), size: file.size, description, previewable, storageKey,
-  });
+  const description = typeof req.body.description === 'string' ? req.body.description : '';
+  const { attachment, safe } = await saveAttachment({ dataform, record, uploader: req.auth.userId, file, description });
+  const { filename } = attachment;
   await autoFollow({ workspace: access.workspace, dataform: dataform._id, record: record._id, userIds: [req.auth.userId] });
   await notify({
     account: dataform.account, recipients: await followersOf(record._id), actor: req.auth.userId, type: 'attachment',
     title: `A file was added to ${recordName}`, body: filename, link: `/w/${dataform.workspace}/f/${dataform._id}?record=${record._id}`,
   });
   emitWorkspace(dataform.workspace, 'attachment.changed', { dataformId: String(dataform._id), recordId: String(record._id) });
-  const { storageKey: _k, ...safe } = attachment.toObject();
+  await dispatchEvent({ account: dataform.account, event: 'attachment.created', dataformId: dataform._id, data: { attachmentId: String(attachment._id), filename, size: attachment.size, mimeType: attachment.mimeType, recordId: String(record._id), dataformId: String(dataform._id), workspaceId: String(dataform.workspace) } });
   res.status(201).json({ attachment: safe });
 });
 
@@ -159,6 +129,7 @@ router.delete('/:id', validate({ params: idParams }), async (req, res) => {
   await storage.remove(attachment.storageKey);
   await attachment.deleteOne();
   emitWorkspace(attachment.workspace, 'attachment.changed', { dataformId: String(attachment.dataform), recordId: String(attachment.record) });
+  await dispatchEvent({ account: attachment.account, event: 'attachment.deleted', dataformId: attachment.dataform, data: { attachmentId: String(attachment._id), filename: attachment.filename, recordId: String(attachment.record), dataformId: String(attachment.dataform), workspaceId: String(attachment.workspace) } });
   res.status(204).end();
 });
 

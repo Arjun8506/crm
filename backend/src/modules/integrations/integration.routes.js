@@ -8,6 +8,7 @@ import { validate } from '../../middleware/validate.js';
 import { badRequest, notFound } from '../../utils/errors.js';
 import { postSlack, assertSlackUrl } from '../../providers/slack.js';
 import { verifyCredentials } from '../../providers/twilio.js';
+import { audit } from '../audit/audit.js';
 import { Integration, KINDS } from './integration.model.js';
 import { channelStatus } from './integration.service.js';
 import { decrypt, encrypt, mask } from './secrets.js';
@@ -76,6 +77,7 @@ router.put(
     if (firstTime || !existing.webhookSecret) doc.webhookSecret = encrypt(crypto.randomBytes(24).toString('hex'));
     doc.status = {}; // a changed configuration has not been tested yet
     await doc.save();
+    await audit(req, firstTime ? 'integration.connected' : 'integration.updated', { type: 'integration', id: doc._id, summary: kind });
     const out = present(doc, sParsed.data);
     res.status(firstTime ? 201 : 200).json({ integration: out, ...(firstTime && kind === 'smtp' ? { webhookSecret: decrypt(doc.webhookSecret) } : {}) });
   },
@@ -84,6 +86,7 @@ router.put(
 router.delete('/:kind', requirePermission('account:update'), validate({ params: kindParams }), async (req, res) => {
   const r = await Integration.deleteOne({ account: req.auth.accountId, kind: req.params.kind });
   if (!r.deletedCount) throw notFound('That integration is not connected');
+  await audit(req, 'integration.disconnected', { type: 'integration', summary: req.params.kind });
   res.status(204).end();
 });
 
@@ -106,6 +109,7 @@ router.post('/:kind/test', requirePermission('account:update'), validate({ param
   }
   doc.status = { lastTestAt: new Date(), ok, ...(error ? { error } : {}) };
   await doc.save();
+  await audit(req, 'integration.tested', { type: 'integration', id: doc._id, summary: `${doc.kind}: ${ok ? 'ok' : 'failed'}` });
   res.json({ ok, error, detail });
 });
 
@@ -115,6 +119,7 @@ router.post('/:kind/rotate-secret', requirePermission('account:update'), validat
   const secret = crypto.randomBytes(24).toString('hex');
   doc.webhookSecret = encrypt(secret);
   await doc.save();
+  await audit(req, 'integration.secret_rotated', { type: 'integration', id: doc._id, summary: doc.kind });
   res.json({ webhookSecret: secret });
 });
 

@@ -9,6 +9,7 @@ import { emitWorkspace } from '../../sockets/index.js';
 import { autoFollow, followersOf } from '../comments/comment.service.js';
 import { notify } from '../notifications/notification.service.js';
 import { User } from '../users/user.model.js';
+import { ApiKey } from '../apikeys/apikey.model.js';
 import { purgeRecords } from './cleanup.js';
 import { runPreSave, triggerPostSave } from '../workflows/trigger.js';
 import { FieldDefinition } from '../dataforms/dataform.model.js';
@@ -41,36 +42,66 @@ const findRecord = async (req, dataform) => {
   return record;
 };
 
-router.post(
-  '/query',
+const queryBody = z.object({
+  page: z.number().int().min(1).max(100000).default(1),
+  limit: z.number().int().min(1).max(200).default(25),
+  sort: z.string().max(60).optional(),
+  q: z.string().max(100).optional(),
+  filter: filterSchema.optional(),
+  fields: z.array(z.string().max(60)).max(100).optional(),
+});
+
+// Validates a `fields` selection (a list of field keys) against the dataform and trims each record's data to it.
+function selection(fields, keys) {
+  if (!keys?.length) return null;
+  const known = new Set(fields.map((f) => f.key));
+  const bad = keys.find((k) => !known.has(k));
+  if (bad) throw badRequest(`Unknown field: ${bad}`);
+  return new Set(keys);
+}
+const trim = (rows, keys) => (keys ? rows.map((r) => ({ ...r, data: Object.fromEntries(Object.entries(r.data ?? {}).filter(([k]) => keys.has(k))) })) : rows);
+
+async function runQuery(req, input) {
+  const { dataform } = await loadDataform(req);
+  const fields = await loadFields(dataform._id);
+  const keys = selection(fields, input.fields);
+  const { page, limit } = input;
+  const parts = [{ account: dataform.account, dataform: dataform._id }];
+  const search = compileSearch(input.q, fields);
+  const filter = compileFilter(input.filter, fields);
+  if (search) parts.push(search);
+  if (filter) parts.push(filter);
+  const query = { $and: parts };
+  const [rows, total] = await Promise.all([
+    RecordModel.find(query).sort(compileSort(input.sort, fields)).skip((page - 1) * limit).limit(limit).lean(),
+    RecordModel.countDocuments(query),
+  ]);
+  return { data: trim(projectForList(fields, rows), keys).map((r) => ({ ...r, _label: label(dataform, r) })), refs: await resolveRefs(req.auth, dataform, fields, rows), page, limit, total };
+}
+
+router.post('/query', validate({ params: idParams, body: queryBody }), async (req, res) => res.json(await runQuery(req, req.body)));
+
+// Plain REST list for API consumers: filters travel in the query string (filter is the same JSON tree, URL-encoded).
+router.get(
+  '/',
   validate({
     params: idParams,
-    body: z.object({
-      page: z.number().int().min(1).max(100000).default(1),
-      limit: z.number().int().min(1).max(200).default(25),
-      sort: z.string().max(60).optional(),
-      q: z.string().max(100).optional(),
-      filter: filterSchema.optional(),
+    query: z.object({
+      page: z.coerce.number().int().min(1).max(100000).default(1), limit: z.coerce.number().int().min(1).max(200).default(25),
+      sort: z.string().max(60).optional(), q: z.string().max(100).optional(), filter: z.string().max(8000).optional(), fields: z.string().max(1000).optional(),
     }),
   }),
   async (req, res) => {
-    const { dataform } = await loadDataform(req);
-    const fields = await loadFields(dataform._id);
-    const { page, limit } = req.body;
-    const parts = [{ account: dataform.account, dataform: dataform._id }];
-    const search = compileSearch(req.body.q, fields);
-    const filter = compileFilter(req.body.filter, fields);
-    if (search) parts.push(search);
-    if (filter) parts.push(filter);
-    const query = { $and: parts };
-
-    const [rows, total] = await Promise.all([
-      RecordModel.find(query).sort(compileSort(req.body.sort, fields)).skip((page - 1) * limit).limit(limit).lean(),
-      RecordModel.countDocuments(query),
-    ]);
-    res.json({
-      data: projectForList(fields, rows).map((r) => ({ ...r, _label: label(dataform, r) })), refs: await resolveRefs(req.auth, dataform, fields, rows), page, limit, total,
-    });
+    let filter;
+    if (req.query.filter) {
+      let parsed;
+      try { parsed = JSON.parse(req.query.filter); } catch { throw badRequest('filter must be valid JSON'); }
+      const result = filterSchema.safeParse(parsed);
+      if (!result.success) throw badRequest('Invalid filter', result.error.issues.map((i) => ({ path: `filter.${i.path.join('.')}`, message: i.message })));
+      filter = result.data;
+    }
+    const { page, limit, sort, q } = req.query;
+    res.json(await runQuery(req, { page, limit, sort, q, filter, fields: req.query.fields?.split(',').map((k) => k.trim()).filter(Boolean) }));
   },
 );
 
@@ -84,7 +115,7 @@ router.post('/', validate({ params: idParams, body: dataBody }), async (req, res
     account: dataform.account, workspace: dataform.workspace, dataform: dataform._id, data, createdBy: req.auth.userId, updatedBy: req.auth.userId,
   });
   await writeHistory([{ account: dataform.account, dataform: dataform._id, record: record._id, action: 'create', user: req.auth.userId, changes: diff({}, data) }]);
-  await autoFollow({ workspace: access.workspace, dataform: dataform._id, record: record._id, userIds: [req.auth.userId] });
+  if (!req.auth.apiKey) await autoFollow({ workspace: access.workspace, dataform: dataform._id, record: record._id, userIds: [req.auth.userId] });
   changed(dataform, record._id, 'create');
   await triggerPostSave({ dataform, fields, event: 'create', before: null, after: record.data, recordId: record._id, version: record.createdAt.getTime(), actorId: req.auth.userId });
   res.status(201).json({ record, refs: await resolveRefs(req.auth, dataform, fields, [record]) });
@@ -197,11 +228,12 @@ router.post('/bulk', validate({
   res.json({ affected: records.length });
 });
 
-router.get('/:recordId', validate({ params: recordParams }), async (req, res) => {
+router.get('/:recordId', validate({ params: recordParams, query: z.object({ fields: z.string().max(1000).optional() }) }), async (req, res) => {
   const { dataform } = await loadDataform(req);
   const record = await findRecord(req, dataform);
   const fields = await loadFields(dataform._id);
-  res.json({ record, refs: await resolveRefs(req.auth, dataform, fields, [record.toObject()]) });
+  const keys = selection(fields, req.query.fields?.split(',').map((k) => k.trim()).filter(Boolean));
+  res.json({ record: trim([record.toObject()], keys)[0], refs: await resolveRefs(req.auth, dataform, fields, [record.toObject()]) });
 });
 
 router.patch('/:recordId', validate({ params: recordParams, body: dataBody }), async (req, res) => {
@@ -269,9 +301,12 @@ router.delete('/:recordId', validate({ params: recordParams }), async (req, res)
 
 router.get('/:recordId/history', validate({ params: recordParams }), async (req, res) => {
   const { dataform } = await loadDataform(req);
-  const history = await RecordHistory.find({ account: dataform.account, dataform: dataform._id, record: req.params.recordId })
-    .sort({ at: -1 }).limit(100).populate('user', 'name').lean();
-  res.json({ data: history });
+  const history = await RecordHistory.find({ account: dataform.account, dataform: dataform._id, record: req.params.recordId }).sort({ at: -1 }).limit(100).lean();
+  // The actor is a person or an API key: resolve either to a display name.
+  const ids = [...new Set(history.map((h) => h.user).filter(Boolean).map(String))];
+  const [users, keys] = await Promise.all([User.find({ _id: { $in: ids } }).select('name').lean(), ApiKey.find({ _id: { $in: ids } }).select('name').lean()]);
+  const names = new Map([...users.map((u) => [String(u._id), { name: u.name }]), ...keys.map((k) => [String(k._id), { name: `API key: ${k.name}` }])]);
+  res.json({ data: history.map((h) => ({ ...h, user: names.get(String(h.user)) ?? null })) });
 });
 
 // Removes dangling relationship values after records are deleted.

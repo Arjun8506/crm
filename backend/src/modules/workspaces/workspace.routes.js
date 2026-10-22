@@ -18,6 +18,7 @@ const isAccountAdmin = (auth) => can(auth.role, 'workspace:admin');
 // workspaces plus private ones they belong to.
 const visibleFilter = (auth) => ({
   account: auth.accountId,
+  ...(auth.apiKey?.workspaces?.length ? { _id: { $in: auth.apiKey.workspaces } } : {}),
   ...(isAccountAdmin(auth)
     ? {}
     : { $or: [{ visibility: 'account' }, { 'members.user': auth.userId }] }),

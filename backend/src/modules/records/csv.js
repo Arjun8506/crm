@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import dayjs from 'dayjs';
 import { RecordModel } from './record.model.js';
 import { resolveRefs } from './record.service.js';
@@ -25,13 +26,15 @@ function format(field, value, refs) {
   }
 }
 
+// `res` is any writable (an HTTP response, or a file stream for background exports); backpressure is respected.
 export async function toCsv({ res, auth, dataform, fields, query, sort }) {
-  res.write(`${fields.map((f) => csvCell(f.label)).join(',')}\r\n`);
+  const write = async (line) => { if (!res.write(line)) await once(res, 'drain'); };
+  await write(`${fields.map((f) => csvCell(f.label)).join(',')}\r\n`);
   let sent = 0;
   let batch = [];
   const flush = async () => {
     const refs = await resolveRefs(auth, dataform, fields, batch);
-    for (const r of batch) res.write(`${fields.map((f) => csvCell(format(f, r.data?.[f.key], refs))).join(',')}\r\n`);
+    for (const r of batch) await write(`${fields.map((f) => csvCell(format(f, r.data?.[f.key], refs))).join(',')}\r\n`);
     batch = [];
   };
   for await (const r of RecordModel.find(query).sort(sort).limit(MAX_ROWS).lean().cursor()) {

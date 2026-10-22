@@ -9,7 +9,8 @@ const attachmentSchema = new mongoose.Schema(
     workspace: { type: ObjectId, ref: 'Workspace', required: true },
     dataform: { type: ObjectId, ref: 'Dataform', required: true },
     record: { type: ObjectId, ref: 'Record', required: true },
-    uploader: { type: ObjectId, ref: 'User', required: true },
+    // Absent for files sent through a public form.
+    uploader: { type: ObjectId, ref: 'User' },
     filename: { type: String, required: true, maxlength: 200 },
     mimeType: { type: String, default: 'application/octet-stream', maxlength: 120 },
     size: { type: Number, required: true },

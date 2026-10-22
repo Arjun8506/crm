@@ -1,6 +1,7 @@
 import { ApiError } from '../../utils/errors.js';
 import { buildContext } from '../formulas/context.js';
 import { renderTemplate } from '../formulas/formula.js';
+import { dispatchRecordEvent } from '../outbound/events.js';
 import { enqueue } from '../queue/queue.js';
 import { User } from '../users/user.model.js';
 import { evaluateTree } from './conditions.js';
@@ -79,6 +80,8 @@ export async function runPreSave({ dataform, fields, event, before, after, recor
 
 // Queues a background execution for every matching "after save" / "after delete" workflow.
 export async function triggerPostSave({ dataform, fields, event, before, after, recordId, version, actorId, source = ROOT }) {
+  // Every record change flows through here, so this is also where outbound webhooks hear about it.
+  await dispatchRecordEvent({ dataform, fields, event, recordId, before, after, actorId, byWorkflow: source.depth > 0 });
   try {
     const type = event === 'delete' ? 'post_delete' : 'post_save';
     const all = await Workflow.find({ account: dataform.account, dataform: dataform._id, enabled: true, 'trigger.type': type }).sort({ createdAt: 1 }).lean();

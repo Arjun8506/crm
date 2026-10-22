@@ -8,6 +8,8 @@ import CloseIcon from '@mui/icons-material/CloseRounded';
 import CopyIcon from '@mui/icons-material/ContentCopyRounded';
 import DeleteIcon from '@mui/icons-material/DeleteOutlineRounded';
 import BoltIcon from '@mui/icons-material/BoltRounded';
+import ShareIcon from '@mui/icons-material/IosShareRounded';
+import ShareDialog from '../publicforms/ShareDialog';
 import FollowIcon from '@mui/icons-material/NotificationsActiveRounded';
 import UnfollowIcon from '@mui/icons-material/NotificationsNoneRounded';
 import { ConfirmDialog, EmptyState, ErrorState } from '../../components/common';
@@ -124,6 +126,7 @@ export default function RecordDrawer({ open, dataform, fields, canWrite, canMode
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [loaded, setLoaded] = useState(null); // updatedAt the form was built from
   const [actionsAnchor, setActionsAnchor] = useState(null);
+  const [sharing, setSharing] = useState(false);
   const { data, isLoading, error, refetch } = useGetRecordQuery({ dataformId: dataform._id, recordId }, { skip: !recordId });
   const { data: discussion } = useListRecordCommentsQuery({ dataformId: dataform._id, recordId }, { skip: !recordId });
   const [setFollow, followState] = useSetFollowMutation();
@@ -179,6 +182,7 @@ export default function RecordDrawer({ open, dataform, fields, canWrite, canMode
         )}
         {mode === 'edit' && writable && (
           <>
+            <Tooltip title="Share a read-only link"><IconButton aria-label="Share record" onClick={() => setSharing(true)}><ShareIcon /></IconButton></Tooltip>
             <Tooltip title="Duplicate"><IconButton aria-label="Duplicate record" onClick={async () => { if (await run(() => copy({ dataformId: dataform._id, recordId }), 'Record duplicated')) onClose(); }}><CopyIcon /></IconButton></Tooltip>
             <Tooltip title="Delete"><IconButton aria-label="Delete record" color="error" onClick={() => setConfirmDelete(true)}><DeleteIcon /></IconButton></Tooltip>
           </>
@@ -222,6 +226,7 @@ export default function RecordDrawer({ open, dataform, fields, canWrite, canMode
         onClose={() => setConfirmDelete(false)}
         onConfirm={async () => { if (await run(() => remove({ dataformId: dataform._id, recordId }), 'Record deleted')) { setConfirmDelete(false); onClose(); } }}
       />
+      {sharing && <ShareDialog open dataform={dataform} fields={fields} recordId={recordId} onClose={() => setSharing(false)} />}
     </Drawer>
   );
 }

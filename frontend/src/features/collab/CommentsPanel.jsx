@@ -7,6 +7,7 @@ import { ConfirmDialog, EmptyState, ErrorState } from '../../components/common';
 import { errorMessage } from '../../services/api';
 import { useListMembersQuery } from '../accounts/accountApi';
 import { showToast } from '../ui/uiSlice';
+import { RewriteMenu } from '../ai/AiAssist';
 import {
   useAddRecordCommentMutation, useAddTaskCommentMutation, useDeleteCommentMutation, useEditCommentMutation,
   useListRecordCommentsQuery, useListTaskCommentsQuery,
@@ -65,6 +66,7 @@ function Composer({ initial = '', initialMentions = [], placeholder, submitLabel
       <Stack direction="row" spacing={1} sx={{ mt: 1, justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="caption" color="text.secondary">Type @ to mention someone · Ctrl+Enter to send</Typography>
         <Stack direction="row" spacing={1}>
+          <RewriteMenu text={text} onUse={setText} />
           {onCancel && <Button size="small" color="inherit" onClick={onCancel}>Cancel</Button>}
           <Button size="small" variant="contained" disabled={!text.trim() || busy} onClick={submit}>{submitLabel}</Button>
         </Stack>

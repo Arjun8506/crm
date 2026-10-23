@@ -16,6 +16,7 @@ import { errorMessage } from '../../services/api';
 import { selectCan } from '../auth/authSlice';
 import { useGetRecordQuery } from '../records/recordsApi';
 import { showToast } from '../ui/uiSlice';
+import { DraftEmailButton } from '../ai/AiAssist';
 import { FieldChips } from './FormulaField';
 import {
   useDeleteInteractionMutation, useGetChannelsQuery, useListInteractionsQuery, useListTemplatesQuery, useLogInteractionMutation, useRenderTemplateMutation, useSendMessageMutation,
@@ -67,6 +68,7 @@ function ComposeDialog({ channel, dataformId, recordId, workspaceId, fields, onC
                 {templates.map((t) => <MenuItem key={t._id} value={t._id}>{t.name}</MenuItem>)}
               </TextField>
             )}
+            {channel === 'email' && <Box sx={{ alignSelf: 'flex-start' }}><DraftEmailButton dataformId={dataformId} recordId={recordId} onUse={(d) => { setSubject(d.subject); setBody(d.body); }} /></Box>}
             {channel === 'email' && <TextField label="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />}
             <Box>
               <TextField fullWidth required multiline minRows={channel === 'email' ? 6 : 3} label="Message" value={body} onChange={(e) => setBody(e.target.value)} helperText="Variables like {{name}} are filled in from the record when sent." />

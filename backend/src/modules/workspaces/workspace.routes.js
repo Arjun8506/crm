@@ -3,9 +3,11 @@ import { z } from 'zod';
 import { authenticate, requirePermission } from '../../middleware/auth.js';
 import { objectId, validate } from '../../middleware/validate.js';
 import { can } from '../../config/permissions.js';
-import { conflict, forbidden, notFound } from '../../utils/errors.js';
+import { PLANS } from '../../config/plans.js';
+import { forbidden, notFound } from '../../utils/errors.js';
 import { slugify } from '../../utils/slug.js';
 import { Account } from '../accounts/account.model.js';
+import { PlanLimitError, entitlementsOf } from '../billing/entitlements.js';
 import { purgeWorkspace } from '../records/cleanup.js';
 import { Workspace } from './workspace.model.js';
 
@@ -34,18 +36,17 @@ async function loadWorkspace(req, { write = false } = {}) {
   return ws;
 }
 
-async function uniqueSlug(accountId, base) {
+export async function uniqueSlug(accountId, base) {
   let slug = slugify(base);
   let n = 1;
   while (await Workspace.exists({ account: accountId, slug })) slug = `${slugify(base)}-${++n}`;
   return slug;
 }
 
-async function assertQuota(accountId) {
+export async function assertQuota(accountId) {
   const [account, count] = await Promise.all([Account.findById(accountId).lean(), Workspace.countDocuments({ account: accountId })]);
-  if (count >= account.entitlements.maxWorkspaces) {
-    throw conflict(`Your ${account.plan} plan allows up to ${account.entitlements.maxWorkspaces} workspaces`);
-  }
+  const limit = entitlementsOf(account).maxWorkspaces;
+  if (count >= limit) throw new PlanLimitError(`Your ${PLANS[account.plan]?.name ?? account.plan} plan allows up to ${limit} workspaces. Upgrade under Billing for more.`, { limit: 'maxWorkspaces' });
 }
 
 const fields = {

@@ -11,6 +11,7 @@ import { notify } from '../notifications/notification.service.js';
 import { User } from '../users/user.model.js';
 import { ApiKey } from '../apikeys/apikey.model.js';
 import { purgeRecords } from './cleanup.js';
+import { assertRecordCapacity } from '../billing/entitlements.js';
 import { runPreSave, triggerPostSave } from '../workflows/trigger.js';
 import { FieldDefinition } from '../dataforms/dataform.model.js';
 import { loadDataform } from '../dataforms/dataform.service.js';
@@ -107,6 +108,7 @@ router.get(
 
 router.post('/', validate({ params: idParams, body: dataBody }), async (req, res) => {
   const { dataform, access } = await writable(req);
+  await assertRecordCapacity(dataform.account);
   const fields = await loadFields(dataform._id);
   const built = buildData(fields, req.body.data, 'create');
   const { data } = await runPreSave({ dataform, fields, event: 'create', before: null, after: built, auth: req.auth });
@@ -269,6 +271,7 @@ router.patch('/:recordId', validate({ params: recordParams, body: dataBody }), a
 router.post('/:recordId/copy', validate({ params: recordParams }), async (req, res) => {
   const { dataform } = await writable(req);
   const source = await findRecord(req, dataform);
+  await assertRecordCapacity(dataform.account);
   const fields = await loadFields(dataform._id);
   // Unique and read-only fields are not carried over to the copy.
   const copied = Object.fromEntries(Object.entries(source.data).filter(([k]) => {

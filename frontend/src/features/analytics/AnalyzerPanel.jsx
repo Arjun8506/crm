@@ -12,6 +12,7 @@ import { buildColumns } from '../records/columns';
 import FilterBuilder, { countConditions, deserialize } from '../records/FilterBuilder';
 import { formatValue } from '../records/fieldUtils';
 import { useQueryRecordsQuery } from '../records/recordsApi';
+import { ExplainButton } from '../ai/AiAssist';
 import { useAnalyzeQuery } from './analyticsApi';
 
 const GROUPABLE = new Set(['text', 'email', 'phone', 'dropdown', 'boolean', 'date', 'datetime', 'relationship', 'integer', 'multiselect']);
@@ -129,6 +130,8 @@ export default function AnalyzerPanel({ dataform, fields, workspaceId, config, o
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Button variant="outlined" color="inherit" startIcon={<FilterIcon />} onClick={() => setFilterOpen(true)}>Filters{countConditions(config.filter) ? ` (${countConditions(config.filter)})` : ''}</Button>
             {countConditions(config.filter) > 0 && <Button size="small" onClick={() => set({ filter: null })}>Clear</Button>}
+            <Box sx={{ flex: 1 }} />
+            {data && data.rows.length > 0 && <ExplainButton dataformId={dataform._id} analysis={{ groupBy, metrics, filter: config.filter || undefined, q: config.q || undefined }} />}
           </Stack>
         </Stack>
       </Card>

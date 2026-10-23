@@ -9,7 +9,7 @@ import { Dataform, FieldDefinition } from './dataform.model.js';
 import { purgeDataformArtifacts } from '../records/cleanup.js';
 import { TYPE_NAMES, operatorsFor } from './fieldTypes.js';
 import { TEMPLATES } from './templates.js';
-import { addField, assertUniqueSafe, loadDataform, normalizeField, uniqueDataformSlug } from './dataform.service.js';
+import { addField, assertUniqueSafe, createDataform, loadDataform, normalizeField, uniqueDataformSlug } from './dataform.service.js';
 
 const router = Router();
 router.use(authenticate);
@@ -68,17 +68,9 @@ router.post(
     const template = req.body.templateId ? TEMPLATES.find((t) => t.id === req.body.templateId) : null;
     if (req.body.templateId && !template) throw badRequest('Unknown template');
 
-    const dataform = await Dataform.create({
-      account: req.auth.accountId, workspace: workspace._id, name: req.body.name,
-      description: req.body.description ?? template?.description ?? '', category: req.body.category ?? template?.category ?? '',
-      slug: await uniqueDataformSlug(req.auth.accountId, workspace._id, req.body.name), createdBy: req.auth.userId,
+    const dataform = await createDataform({
+      accountId: req.auth.accountId, userId: req.auth.userId, workspace, name: req.body.name, description: req.body.description, category: req.body.category, template,
     });
-    try {
-      for (const f of template?.fields ?? []) await addField(dataform, f);
-    } catch (err) {
-      await Promise.all([dataform.deleteOne(), FieldDefinition.deleteMany({ dataform: dataform._id })]);
-      throw err;
-    }
     res.status(201).json({ dataform });
   },
 );

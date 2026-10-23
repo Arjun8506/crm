@@ -13,7 +13,7 @@ export function csvCell(value) {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function format(field, value, refs) {
+export function format(field, value, refs) {
   if (value === null || value === undefined) return '';
   switch (field.type) {
     case 'boolean': return value ? 'Yes' : 'No';

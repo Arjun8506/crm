@@ -4,6 +4,7 @@ import { verifyAccessToken } from '../modules/auth/auth.service.js';
 import { Account } from '../modules/accounts/account.model.js';
 import { ApiKey, API_KEY_PREFIX, hashKey } from '../modules/apikeys/apikey.model.js';
 import { keyAllows } from '../modules/apikeys/policy.js';
+import { PlanLimitError, entitlementsOf } from '../modules/billing/entitlements.js';
 import { Membership } from '../modules/users/membership.model.js';
 import { can } from '../config/permissions.js';
 import { ApiError, forbidden, unauthorized } from '../utils/errors.js';
@@ -22,8 +23,9 @@ const runLimiter = (req, res) => new Promise((resolve, reject) => keyLimiter(req
 async function authenticateApiKey(token, req, res) {
   const key = await ApiKey.findOne({ hash: hashKey(token) }).lean();
   if (!key || key.revokedAt || (key.expiresAt && key.expiresAt < new Date())) throw unauthorized('Invalid or expired API key');
-  const account = await Account.findById(key.account).select('status').lean();
+  const account = await Account.findById(key.account).select('status plan entitlementOverrides').lean();
   if (!account || account.status !== 'active') throw unauthorized('Invalid or expired API key');
+  if (!entitlementsOf(account).apiAccess) throw new PlanLimitError('API access is not included in the current plan', { limit: 'apiAccess' });
 
   const path = req.originalUrl.split('?')[0].replace(/^\/api\/v1/, '');
   if (!keyAllows(key.scope, req.method, path)) {

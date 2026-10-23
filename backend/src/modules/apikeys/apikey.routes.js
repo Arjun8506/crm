@@ -4,6 +4,7 @@ import { authenticate, humansOnly, requirePermission } from '../../middleware/au
 import { objectId, validate } from '../../middleware/validate.js';
 import { badRequest, notFound } from '../../utils/errors.js';
 import { audit } from '../audit/audit.js';
+import { requireFeature } from '../billing/entitlements.js';
 import { Workspace } from '../workspaces/workspace.model.js';
 import { ApiKey, API_KEY_PREFIX, generateKey, hashKey } from './apikey.model.js';
 
@@ -25,6 +26,7 @@ router.post(
     }),
   }),
   async (req, res) => {
+    await requireFeature(req.auth.accountId, 'apiAccess', 'API keys and webhooks');
     const ids = [...new Set(req.body.workspaceIds)];
     if (ids.length && (await Workspace.countDocuments({ _id: { $in: ids }, account: req.auth.accountId })) !== ids.length) throw badRequest('One of the workspaces does not exist');
     const token = generateKey();

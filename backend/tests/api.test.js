@@ -112,7 +112,9 @@ describe('tenant isolation and permissions', () => {
     const globex = await login('owner@globex.test');
     for (let i = 0; i < 3; i++) await request(app).post('/api/v1/workspaces').set(as(globex.token)).send({ name: `Extra ${i}` }).expect(201);
     const over = await request(app).post('/api/v1/workspaces').set(as(globex.token)).send({ name: 'One too many' });
-    assert.equal(over.status, 409);
+    assert.equal(over.status, 402);
+    assert.equal(over.body.error.code, 'PLAN_LIMIT');
+    assert.match(over.body.error.message, /Free plan allows up to 5 workspaces/);
   });
 
   it('protects member management', async () => {

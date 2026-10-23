@@ -17,7 +17,6 @@ const tenants = [
     name: 'Acme Industries',
     sampleData: true,
     plan: 'team',
-    entitlements: { maxWorkspaces: 15, maxUsers: 50, locationFields: true },
     industry: 'Manufacturing',
     timezone: 'America/New_York',
     users: [
@@ -59,7 +58,6 @@ export async function seed() {
       name: t.name,
       slug: slugify(t.name),
       plan: t.plan,
-      ...(t.entitlements ? { entitlements: t.entitlements } : {}),
       settings: { industry: t.industry, timezone: t.timezone },
       onboarding: { completedAt: new Date() },
     });

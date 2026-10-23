@@ -101,6 +101,18 @@ Base path `/api/v1`. Errors use `{ "error": { "code", "message", "details?" } }`
 | `GET, POST /dataforms/:id/records/:recordId/shares`; `DELETE .../shares/:shareId` | Read-only public links to chosen fields of one record (editors) |
 | `GET /public/forms/:token`; `POST /public/forms/:token/submit`; `GET /public/shares/:token` | Visitor endpoints. No sign-in; rate limited; always `noindex, no-store` |
 
+| `GET /billing/plans`, `/billing/overview`, `/billing/invoices`; `GET /billing/change-preview?plan=` | Plan definitions; plan, subscription, usage against limits, provider status; invoices; what a plan change would stop (account admins for all but plans and overview) |
+| `POST /billing/checkout`; `GET /billing/checkout/:sessionId` | Start a paid checkout (nothing changes until the provider confirms) and check its state |
+| `POST /billing/change-plan` (`{ plan, confirm: true }`), `/billing/resume` | Schedule a downgrade or cancellation for the end of the period, or undo it |
+| `POST /billing/test-checkout/:sessionId/complete` | Development only: plays the payment page by sending a signed confirmation through the webhook handler |
+| `POST /webhooks/billing/:provider` | Payment provider events. Signature verified over the raw body; each event handled once |
+| `GET /ai/status`; `POST /ai/rewrite`, `/ai/summarize`, `/ai/ask`, `/ai/draft-email`, `/ai/explain-analysis`, `/ai/suggest-workflow`, `/ai/suggest-action` | AI assistance (people only). Drafts are validated and never saved or sent by the server |
+| `GET /onboarding`; `POST /onboarding/setup`, `/skip`, `/dismiss`, `/reopen` | Setup wizard and a checklist computed from real data |
+| `POST, GET /feedback`; `GET /feedback/mine`; `PATCH /feedback/:id` | Feedback and support questions; admin triage |
+| `GET, POST /announcements`; `POST /announcements/seen`; `DELETE /announcements/:id` | Product news and organisation announcements |
+| `GET /nps/eligibility`, `/nps/summary`; `POST /nps`, `/nps/dismiss` | Satisfaction survey |
+| `GET /events/privacy`, `/events/summary`; `POST /events`; `DELETE /events/me` | Anonymous usage events, the admin summary, and deleting your own |
+
 **Real-time (Socket.IO, same origin as the API).** Connect with `{ auth: { token: <access token> } }`, then `emit('subscribe', { workspaceId }, ack)` for each workspace; the server only joins rooms you may open. Events carry ids only (`record.changed`, `comment.changed`, `task.changed`, `attachment.changed`, `notification.new`): refetch through the REST API.
 
 **Filter format** (validated and compiled server-side; unknown fields/operators are rejected):
@@ -131,6 +143,10 @@ Access levels per workspace: viewer (read), editor (records), admin (dataform st
 - **CSV imports** go through the same validation, uniqueness checks, before-save rules, history and webhooks as typing a record in. An uploaded file is deleted after 30 days; exports after 3. A running import resumes from its last saved row if the server restarts.
 - **Public forms** expose only the fields an admin ticked (never relationship fields), use an unguessable link that can be replaced, and are protected by a hidden honeypot field, a signed minimum-time token, a per-IP rate limit and an optional response limit. A unique-value clash is reported as "not available" rather than saying the record exists.
 - **Public record links** store only a hash of the link, show only the chosen list-visible fields read-only, expire (max 90 days), can be withdrawn, and give one identical "not available" answer for unknown, expired, withdrawn and deleted.
+- **Plans** are enforced where things are created (workspaces, records, file size, API keys, webhooks, public pages, location fields, AI requests); existing data is never deleted when an account moves to a smaller plan. API keys and outbound webhooks stop working after a downgrade and resume if the plan allows them again.
+- **Billing** never trusts the browser: a checkout is only a pending row until the payment provider's signed event arrives, events are verified over the raw bytes, handled once by event id, and a confirmation for a checkout the account never started changes nothing. Card details never touch this server (Stripe's hosted checkout). The simulated "test" provider refuses to run in production.
+- **AI** keys stay on the server; AI is off until an account admin switches it on; every call is an explicit button press by a signed-in person, checked against workspace access *before* anything is prepared. Email and phone fields are never sent, addresses and numbers in free text are masked, list-hidden fields are excluded (history too), and the person is shown what was sent. Instructions inside record data are labelled untrusted. Workflow and action drafts are validated against the real dataform (including the webhook address check) and are never saved by the AI endpoint.
+- **Product usage tracking** records only the name of a page or feature, when, and a one-way code per person (never ids, content, IPs or devices); it is skipped for Do Not Track / Global Privacy Control, for people who opt out, and for organisations that switch it off; people can delete their own events; events expire after 180 days.
 - `backend/.env` is git-ignored. Never commit database credentials.
 
 ## Known limitations

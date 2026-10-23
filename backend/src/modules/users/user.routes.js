@@ -16,13 +16,14 @@ router.patch(
   validate({
     body: z.object({
       name: z.string().trim().min(1).max(120).optional(),
-      preferences: z.object({ theme: z.enum(['light', 'dark', 'system']).optional() }).optional(),
+      preferences: z.object({ theme: z.enum(['light', 'dark', 'system']).optional(), analytics: z.boolean().optional() }).optional(),
     }),
   }),
   async (req, res) => {
     const $set = {};
     if (req.body.name) $set.name = req.body.name;
     if (req.body.preferences?.theme) $set['preferences.theme'] = req.body.preferences.theme;
+    if (req.body.preferences?.analytics !== undefined) $set['preferences.analytics'] = req.body.preferences.analytics;
     const user = await User.findByIdAndUpdate(req.auth.userId, { $set }, { returnDocument: 'after' });
     res.json({ user });
   },

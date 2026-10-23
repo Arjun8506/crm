@@ -19,6 +19,21 @@ const schema = z.object({
   PUBLIC_API_URL: z.string().default('http://localhost:4000'),
   // Outbound webhooks to private / loopback addresses are blocked (SSRF protection). Enable only for local development.
   ALLOW_PRIVATE_WEBHOOKS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  // Billing. 'test' simulates a payment provider (development only: refused in production); 'stripe' talks to Stripe; 'none' hides checkout.
+  BILLING_PROVIDER: z.enum(['test', 'stripe', 'none']).optional(),
+  BILLING_WEBHOOK_SECRET: z.string().min(16).optional(),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRICE_TEAM: z.string().optional(),
+  STRIPE_PRICE_BUSINESS: z.string().optional(),
+  // AI assistance. Without a key the AI features are simply unavailable.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().default('claude-sonnet-5-5'),
+  // Only change this to reach the API through a gateway or proxy you run.
+  AI_BASE_URL: z.string().url().default('https://api.anthropic.com'),
+  AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(30000),
+  // Optional: where product feedback and support requests are also emailed (needs SMTP). They are always stored in the app.
+  SUPPORT_EMAIL: z.string().email().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

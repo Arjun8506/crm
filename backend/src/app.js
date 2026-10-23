@@ -24,6 +24,11 @@ import workflowRoutes from './modules/workflows/workflow.routes.js';
 import apiKeyRoutes from './modules/apikeys/apikey.routes.js';
 import outboundRoutes from './modules/outbound/webhook.routes.js';
 import auditRoutes from './modules/audit/audit.js';
+import { announcementRouter, feedbackRouter, npsRouter } from './modules/business/feedback.routes.js';
+import insightsRoutes from './modules/business/insights.routes.js';
+import onboardingRoutes from './modules/business/onboarding.routes.js';
+import aiRoutes from './modules/ai/ai.routes.js';
+import billingRoutes, { billingWebhookRouter } from './modules/billing/billing.routes.js';
 import openapiRoutes from './modules/openapi/openapi.routes.js';
 import publicRoutes from './modules/publicforms/public.routes.js';
 import { formAdminRouter, shareAdminRouter } from './modules/publicforms/form.routes.js';
@@ -36,6 +41,8 @@ export function createApp() {
   app.disable('x-powered-by');
   app.use(helmet());
   app.use(cors({ origin: env.CLIENT_ORIGIN.split(','), credentials: true }));
+  // Payment provider webhooks need the exact raw bytes to verify their signature, so they are mounted before the JSON parser.
+  app.use('/api/v1/webhooks/billing', express.raw({ type: '*/*', limit: '1mb' }), billingWebhookRouter);
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
   app.use('/api/v1', rateLimit({
@@ -73,6 +80,13 @@ export function createApp() {
   app.use('/api/v1/api-keys', apiKeyRoutes);
   app.use('/api/v1/outbound-webhooks', outboundRoutes);
   app.use('/api/v1/audit', auditRoutes);
+  app.use('/api/v1/billing', billingRoutes);
+  app.use('/api/v1/ai', aiRoutes);
+  app.use('/api/v1/onboarding', onboardingRoutes);
+  app.use('/api/v1/feedback', feedbackRouter);
+  app.use('/api/v1/announcements', announcementRouter);
+  app.use('/api/v1/nps', npsRouter);
+  app.use('/api/v1/events', insightsRoutes);
   app.use('/api/v1', openapiRoutes);
   app.use('/api/v1/public', publicRoutes);
   app.use('/api/v1/imports', importRoutes);

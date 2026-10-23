@@ -11,7 +11,7 @@ import DarkIcon from '@mui/icons-material/DarkModeOutlined';
 import SystemIcon from '@mui/icons-material/SettingsBrightnessOutlined';
 import LogoutIcon from '@mui/icons-material/LogoutRounded';
 import PersonIcon from '@mui/icons-material/PersonOutlineRounded';
-import { setMobileNav, setThemeMode, showToast } from '../features/ui/uiSlice';
+import { setMobileNav, setThemeMode } from '../features/ui/uiSlice';
 import { useLogoutMutation } from '../features/auth/authApi';
 import { useListWorkspacesQuery } from '../features/workspaces/workspacesApi';
 import NotificationBell from '../features/notifications/NotificationBell';
@@ -52,7 +52,6 @@ export default function Topbar() {
   const [logout] = useLogoutMutation();
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [themeAnchor, setThemeAnchor] = useState(null);
-  const soon = (what) => () => dispatch(showToast(`${what} arrives in a later phase`, 'info'));
   const current = MODES.find((m) => m.value === mode);
 
   return (
@@ -70,7 +69,7 @@ export default function Topbar() {
         <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
           <Tooltip title="Theme"><IconButton onClick={(e) => setThemeAnchor(e.currentTarget)} aria-label="Change theme">{current.icon}</IconButton></Tooltip>
           <NotificationBell />
-          {isDesktop && <Tooltip title="Help"><IconButton onClick={soon('The help centre')} aria-label="Help"><HelpIcon /></IconButton></Tooltip>}
+          {isDesktop && <Tooltip title="Help & feedback"><IconButton onClick={() => navigate('/help', { state: { from: window.location.pathname } })} aria-label="Help"><HelpIcon /></IconButton></Tooltip>}
           <IconButton onClick={(e) => setMenuAnchor(e.currentTarget)} aria-label="Account menu" sx={{ ml: 0.5 }}>
             <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: 14 }}>{user?.name?.[0]?.toUpperCase()}</Avatar>
           </IconButton>

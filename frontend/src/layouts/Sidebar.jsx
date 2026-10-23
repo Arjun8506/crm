@@ -1,4 +1,4 @@
-import { Box, Divider, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, ListSubheader, Stack, Tooltip, useMediaQuery } from '@mui/material';
+import { Badge, Box, Divider, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, ListSubheader, Stack, Tooltip, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { motion } from 'framer-motion';
 import { NavLink, useMatch } from 'react-router-dom';
@@ -16,6 +16,7 @@ import { setMobileNav, toggleSidebar } from '../features/ui/uiSlice';
 import { selectCan } from '../features/auth/authSlice';
 import { useListWorkspacesQuery } from '../features/workspaces/workspacesApi';
 import { useListDataformsQuery } from '../features/dataforms/dataformsApi';
+import { useGetNewsQuery } from '../features/business/businessApi';
 import TableIcon from '@mui/icons-material/TableRowsOutlined';
 import DashboardIcon from '@mui/icons-material/SpaceDashboardOutlined';
 import ReportIcon from '@mui/icons-material/QueryStatsRounded';
@@ -24,6 +25,10 @@ import BellIcon from '@mui/icons-material/NotificationsNoneRounded';
 import AutoIcon from '@mui/icons-material/AutoFixHighOutlined';
 import PlugIcon from '@mui/icons-material/PowerOutlined';
 import CodeIcon from '@mui/icons-material/CodeRounded';
+import CardIcon from '@mui/icons-material/CreditCardRounded';
+import HelpIcon from '@mui/icons-material/HelpOutlineRounded';
+import NewsIcon from '@mui/icons-material/CampaignOutlined';
+import InsightsIcon from '@mui/icons-material/InsightsRounded';
 
 function NavItem({ to, icon, label, collapsed, end, onClick }) {
   const item = (
@@ -49,6 +54,7 @@ function SidebarContent({ collapsed, onNavigate }) {
   const currentId = wsMatch?.params.workspaceId;
   const canManageUsers = useSelector(selectCan('user:manage'));
   const { data: workspaces = [] } = useListWorkspacesQuery();
+  const { data: news } = useGetNewsQuery();
   const current = workspaces.find((w) => w._id === currentId);
   const { data: dataforms = [] } = useListDataformsQuery({ workspaceId: currentId }, { skip: !current });
 
@@ -72,9 +78,14 @@ function SidebarContent({ collapsed, onNavigate }) {
         {!collapsed && <ListSubheader disableSticky sx={{ bgcolor: 'transparent', lineHeight: '28px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Administration</ListSubheader>}
         <NavItem to="/team" icon={<PeopleIcon />} label={canManageUsers ? 'Team & roles' : 'Team'} collapsed={collapsed} onClick={onNavigate} />
         {canManageUsers && <NavItem to="/settings/integrations" icon={<PlugIcon />} label="Integrations" collapsed={collapsed} onClick={onNavigate} />}
+        {canManageUsers && <NavItem to="/settings/billing" icon={<CardIcon />} label="Billing & plan" collapsed={collapsed} onClick={onNavigate} />}
+        {canManageUsers && <NavItem to="/settings/insights" icon={<InsightsIcon />} label="Feedback & insights" collapsed={collapsed} onClick={onNavigate} />}
         {canManageUsers && <NavItem to="/settings/developers" icon={<CodeIcon />} label="Developers" collapsed={collapsed} onClick={onNavigate} />}
         <NavItem to="/settings/account" icon={<BusinessIcon />} label="Account & usage" collapsed={collapsed} onClick={onNavigate} />
         <NavItem to="/settings/profile" icon={<PersonIcon />} label="Profile & preferences" collapsed={collapsed} onClick={onNavigate} />
+        <Divider sx={{ my: 1.5 }} />
+        <NavItem to="/whats-new" icon={<Badge color="primary" variant="dot" invisible={!news?.unread}><NewsIcon /></Badge>} label={news?.unread ? `What’s new (${news.unread})` : 'What’s new'} collapsed={collapsed} onClick={onNavigate} />
+        <NavItem to="/help" icon={<HelpIcon />} label="Help & feedback" collapsed={collapsed} onClick={onNavigate} />
       </List>
     </Stack>
   );

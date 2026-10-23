@@ -1,6 +1,7 @@
-import { badRequest, conflict, forbidden, notFound } from '../../utils/errors.js';
+import { badRequest, conflict, notFound } from '../../utils/errors.js';
 import { slugify } from '../../utils/slug.js';
 import { Account } from '../accounts/account.model.js';
+import { PlanLimitError, entitlementsOf } from '../billing/entitlements.js';
 import { RecordModel } from '../records/record.model.js';
 import { workspaceAccess } from '../workspaces/access.js';
 import { Dataform, FieldDefinition } from './dataform.model.js';
@@ -77,6 +78,21 @@ export async function assertUniqueSafe(dataform, key) {
   if (dupes.length) throw conflict('Existing records already contain duplicate values for this field');
 }
 
+// Creates a dataform (optionally filled with a template's fields) and removes it again if any field is invalid.
+export async function createDataform({ accountId, userId, workspace, name, description, category, template }) {
+  const dataform = await Dataform.create({
+    account: accountId, workspace: workspace._id, name, description: description ?? template?.description ?? '', category: category ?? template?.category ?? '',
+    slug: await uniqueDataformSlug(accountId, workspace._id, name), createdBy: userId,
+  });
+  try {
+    for (const f of template?.fields ?? []) await addField(dataform, f);
+  } catch (err) {
+    await Promise.all([dataform.deleteOne(), FieldDefinition.deleteMany({ dataform: dataform._id })]);
+    throw err;
+  }
+  return dataform;
+}
+
 export async function addField(dataform, input) {
   if (!TYPES[input.type]) throw badRequest('Unknown field type');
   const count = await FieldDefinition.countDocuments({ dataform: dataform._id });
@@ -84,7 +100,7 @@ export async function addField(dataform, input) {
   if (await FieldDefinition.exists({ dataform: dataform._id, key: input.key })) throw conflict('A field with this key already exists');
   if (input.type === 'location') {
     const account = await Account.findById(dataform.account).lean();
-    if (!account?.entitlements?.locationFields) throw forbidden('Location fields are not included in your plan');
+    if (!entitlementsOf(account).locationFields) throw new PlanLimitError('Location fields and the map view are included from the Team plan. Upgrade under Billing to use them.', { limit: 'locationFields' });
   }
 
   const f = await normalizeField(dataform, input);

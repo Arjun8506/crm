@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { BlockedUrlError, assertPublicUrl, request } from '../../providers/http.js';
 import { AuditLog } from '../audit/audit.js';
+import { featureEnabled } from '../billing/entitlements.js';
 import { decrypt } from '../integrations/secrets.js';
 import { notify } from '../notifications/notification.service.js';
 import { enqueue, registerHandler } from '../queue/queue.js';
@@ -22,6 +23,8 @@ export async function dispatchEvent({ account, event, dataformId, data, eventId 
   try {
     // `only` re-sends one event to one webhook (redelivery) regardless of its current subscriptions.
     const hooks = only ? await OutboundWebhook.find({ _id: only, account }).lean() : await OutboundWebhook.find({ account, enabled: true, events: event }).lean();
+    // Outbound webhooks are a plan feature: after a downgrade, existing hooks stay configured but stop sending.
+    if (hooks.length && !(await featureEnabled(account, 'apiAccess'))) return;
     for (const hook of hooks) {
       if (!only && hook.dataforms.length && (!dataformId || !hook.dataforms.some((d) => String(d) === String(dataformId)))) continue;
       const payload = { id: eventId, event, createdAt: new Date().toISOString(), data };

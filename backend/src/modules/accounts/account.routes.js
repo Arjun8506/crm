@@ -4,6 +4,7 @@ import { authenticate, requirePermission } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
 import { notFound } from '../../utils/errors.js';
 import { audit } from '../audit/audit.js';
+import { entitlementsOf } from '../billing/entitlements.js';
 import { Account } from './account.model.js';
 import { Workspace } from '../workspaces/workspace.model.js';
 import { Membership } from '../users/membership.model.js';
@@ -18,7 +19,7 @@ router.get('/current', requirePermission('account:read'), async (req, res) => {
     Workspace.countDocuments({ account: account._id }),
     Membership.countDocuments({ account: account._id, status: 'active' }),
   ]);
-  res.json({ account, usage: { workspaces, users } });
+  res.json({ account: { ...account, entitlements: entitlementsOf(account) }, usage: { workspaces, users } });
 });
 
 router.patch(
@@ -30,6 +31,8 @@ router.patch(
       settings: z.object({
         timezone: z.string().max(60).optional(),
         industry: z.string().trim().max(80).optional(),
+        aiEnabled: z.boolean().optional(),
+        analytics: z.boolean().optional(),
       }).optional(),
     }),
   }),

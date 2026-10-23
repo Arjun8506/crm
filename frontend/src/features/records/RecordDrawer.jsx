@@ -10,6 +10,7 @@ import DeleteIcon from '@mui/icons-material/DeleteOutlineRounded';
 import BoltIcon from '@mui/icons-material/BoltRounded';
 import ShareIcon from '@mui/icons-material/IosShareRounded';
 import ShareDialog from '../publicforms/ShareDialog';
+import { RecordAiMenu } from '../ai/AiAssist';
 import FollowIcon from '@mui/icons-material/NotificationsActiveRounded';
 import UnfollowIcon from '@mui/icons-material/NotificationsNoneRounded';
 import { ConfirmDialog, EmptyState, ErrorState } from '../../components/common';
@@ -161,6 +162,7 @@ export default function RecordDrawer({ open, dataform, fields, canWrite, canMode
             </span>
           </Tooltip>
         )}
+        {mode === 'edit' && <RecordAiMenu dataformId={dataform._id} recordId={recordId} />}
         {mode === 'edit' && writable && manualFlows.length > 0 && (
           <>
             <Button size="small" variant="outlined" startIcon={<BoltIcon />} onClick={(e) => setActionsAnchor(e.currentTarget)} aria-haspopup="menu">Actions</Button>

@@ -3,6 +3,7 @@ import { ApiError } from '../../utils/errors.js';
 import { csvCell } from '../records/csv.js';
 import { Dataform } from '../dataforms/dataform.model.js';
 import { ValueError, parseValue } from '../dataforms/fieldTypes.js';
+import { recordLimitError, recordRoom } from '../billing/entitlements.js';
 import { notify } from '../notifications/notification.service.js';
 import { RecordHistory, RecordModel } from '../records/record.model.js';
 import { buildData, checkReferences, diff, loadFields } from '../records/record.service.js';
@@ -90,6 +91,8 @@ async function run({ importId }, { job: queueJob }) {
   const seenMatch = new Set();
   const seenUnique = new Map();
   const dry = job.dryRun;
+  const capacity = await recordRoom(job.account);
+  let room = capacity.room;
   const errors = [...job.errors];
   const counts = { ...job.counts.toObject() };
 
@@ -150,7 +153,9 @@ async function run({ importId }, { job: queueJob }) {
     }
 
     const built = buildData(fields, input, 'create');
+    if (room <= 0) throw recordLimitError(capacity.limit);
     if (dry) {
+      room--;
       // Without writing anything, still catch repeats of unique values within the file itself.
       for (const f of fields.filter((x) => x.unique && built[x.key] != null)) {
         const set = seenUnique.get(f.key) ?? new Set();
@@ -164,6 +169,7 @@ async function run({ importId }, { job: queueJob }) {
     const { data } = await runPreSave({ dataform, fields, event: 'create', before: null, after: built, auth });
     await checkReferences(auth, dataform, fields, data);
     const record = await RecordModel.create({ account: job.account, workspace: job.workspace, dataform: job.dataform, data, createdBy: job.user, updatedBy: job.user });
+    room--;
     await RecordHistory.create({ account: job.account, dataform: job.dataform, record: record._id, action: 'create', user: job.user, source: 'import', changes: diff({}, data) });
     await triggerPostSave({ dataform, fields, event: 'create', before: null, after: record.data, recordId: record._id, version: record.createdAt.getTime(), actorId: job.user });
     return 'created';

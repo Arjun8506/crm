@@ -6,6 +6,7 @@ import { objectId, validate } from '../../middleware/validate.js';
 import { BlockedUrlError, assertPublicUrl } from '../../providers/http.js';
 import { badRequest, notFound } from '../../utils/errors.js';
 import { audit } from '../audit/audit.js';
+import { requireFeature } from '../billing/entitlements.js';
 import { Dataform } from '../dataforms/dataform.model.js';
 import { encrypt } from '../integrations/secrets.js';
 import { attempt, dispatchEvent } from './events.js';
@@ -36,6 +37,7 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', validate({ body: z.object({ name: fields.name, url: fields.url, events: fields.events, dataformIds: fields.dataformIds.default([]) }) }), async (req, res) => {
+  await requireFeature(req.auth.accountId, 'apiAccess', 'API keys and webhooks');
   const dataforms = await checkTargets(req, req.body);
   const secret = crypto.randomBytes(24).toString('hex');
   const hook = await OutboundWebhook.create({ account: req.auth.accountId, name: req.body.name, url: req.body.url, events: req.body.events, dataforms, secret: encrypt(secret), createdBy: req.auth.userId });
@@ -50,6 +52,7 @@ router.patch(
     const hook = await OutboundWebhook.findOne({ _id: req.params.id, account: req.auth.accountId });
     if (!hook) throw notFound('Webhook not found');
     const { dataformIds, enabled, ...rest } = req.body;
+    if (enabled) await requireFeature(req.auth.accountId, 'apiAccess', 'API keys and webhooks');
     const ids = await checkTargets(req, { url: rest.url, dataformIds });
     Object.assign(hook, rest);
     if (dataformIds) hook.dataforms = ids;

@@ -312,16 +312,16 @@ describe('attachments', () => {
     assert.equal((await upload(GLOBEX, Buffer.from('hi'), 'a.txt', 'text/plain')).status, 404);
     const list = (await api('get', VIEWER, rec('/attachments'))).body;
     assert.equal(list.data.length, 3);
-    assert.equal(list.maxUploadMb, 25);
+    assert.equal(list.maxUploadMb, 100, 'the Team plan allows 100 MB');
   });
 
   it('enforces the plan upload limit', async () => {
     const { Account } = await import('../src/modules/accounts/account.model.js');
-    await Account.updateOne({ slug: 'acme-industries' }, { 'entitlements.maxUploadMb': 1 });
+    await Account.updateOne({ slug: 'acme-industries' }, { 'entitlementOverrides.maxUploadMb': 1 });
     const big = await upload(MEMBER, Buffer.alloc(1.5 * 1024 * 1024, 1), 'big.bin', 'application/octet-stream');
     assert.equal(big.status, 413);
     assert.match(big.body.error.message, /1 MB/);
-    await Account.updateOne({ slug: 'acme-industries' }, { 'entitlements.maxUploadMb': 25 });
+    await Account.updateOne({ slug: 'acme-industries' }, { $unset: { entitlementOverrides: '' } });
   });
 
   it('serves downloads only to authorized users, with safe headers', async () => {

@@ -6,6 +6,7 @@ import { env } from '../../config/env.js';
 import { ApiError, badRequest, notFound } from '../../utils/errors.js';
 import { emitWorkspace } from '../../sockets/index.js';
 import { Account } from '../accounts/account.model.js';
+import { assertRecordCapacity, entitlementsOf, featureEnabled } from '../billing/entitlements.js';
 import { saveAttachment } from '../attachments/attachment.service.js';
 import { Dataform } from '../dataforms/dataform.model.js';
 import { notify } from '../notifications/notification.service.js';
@@ -57,7 +58,7 @@ const closedReason = (form) => {
 async function loadForm(req, _res, next) {
   const token = String(req.params.token ?? '');
   const form = token.length >= 20 && token.length <= 80 ? await PublicForm.findOne({ token }) : null;
-  if (!form) throw notFound('This form does not exist');
+  if (!form || !(await featureEnabled(form.account, 'publicPages'))) throw notFound('This form does not exist');
   const dataform = await Dataform.findOne({ _id: form.dataform, account: form.account });
   if (!dataform || dataform.status === 'archived') throw notFound('This form does not exist');
   req.pub = { form, dataform };
@@ -78,7 +79,7 @@ router.get('/forms/:token', limiter(120), loadForm, async (req, res) => {
       min: d.min ?? undefined, max: d.max ?? undefined,
     };
   });
-  res.json({ form: { name: form.name, description: form.description, fields, allowFiles: form.allowFiles, maxFiles: MAX_FILES, maxUploadMb: account?.entitlements?.maxUploadMb || 25 }, formToken: issue(form._id), honeypot: HONEYPOT, minSeconds: Math.ceil(timing.minMs / 1000) });
+  res.json({ form: { name: form.name, description: form.description, fields, allowFiles: form.allowFiles, maxFiles: MAX_FILES, maxUploadMb: entitlementsOf(account).maxUploadMb }, formToken: issue(form._id), honeypot: HONEYPOT, minSeconds: Math.ceil(timing.minMs / 1000) });
 });
 
 // ---- POST /public/forms/:token/submit ----
@@ -94,7 +95,7 @@ function receive(req, res, next) {
 }
 
 router.post('/forms/:token/submit', limiter(20), loadForm, async (req, _res, next) => {
-  req.pub.maxMb = (await Account.findById(req.pub.form.account).lean())?.entitlements?.maxUploadMb || 25;
+  req.pub.maxMb = entitlementsOf(await Account.findById(req.pub.form.account).lean()).maxUploadMb;
   next();
 }, receive, async (req, res) => {
   const { form, dataform } = req.pub;
@@ -119,6 +120,8 @@ router.post('/forms/:token/submit', limiter(20), loadForm, async (req, _res, nex
     if (f.required && (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length))) errors.push({ path: `data.${key}`, message: 'This field is required' });
   }
   if (errors.length) throw badRequest('Validation failed', errors);
+
+  try { await assertRecordCapacity(form.account); } catch { throw new ApiError(410, 'FORM_CLOSED', 'This form is not accepting responses right now.'); }
 
   // Claim a response slot first, so concurrent submissions can never exceed the limit.
   const claimed = await PublicForm.findOneAndUpdate(
@@ -164,7 +167,7 @@ router.get('/shares/:token', limiter(120), async (req, res) => {
   const gone = () => notFound('This link is not available');
   if (token.length < 20 || token.length > 80) throw gone();
   const share = await PublicShare.findOne({ tokenHash: hashToken(token) });
-  if (!share || share.revokedAt || share.expiresAt <= new Date()) throw gone();
+  if (!share || share.revokedAt || share.expiresAt <= new Date() || !(await featureEnabled(share.account, 'publicPages'))) throw gone();
   const [dataform, record, fields] = await Promise.all([
     Dataform.findOne({ _id: share.dataform, account: share.account }).lean(),
     RecordModel.findOne({ _id: share.record, account: share.account }).lean(),

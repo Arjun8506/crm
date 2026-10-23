@@ -1,4 +1,5 @@
 import { notify } from '../modules/notifications/notification.service.js';
+import { applyDuePlanChanges } from '../modules/billing/billing.service.js';
 import { purgeExpiredJobs } from '../modules/imports/cleanup.js';
 import { runDueWorkflows } from '../modules/workflows/engine.js';
 import { Task } from '../modules/tasks/task.model.js';
@@ -36,6 +37,7 @@ export function startScheduler(intervalMs = 60_000) {
   const timer = setInterval(() => {
     runScheduledNotifications().catch((err) => console.error('[scheduler] run failed:', err.message));
     runDueWorkflows().catch((err) => console.error('[scheduler] workflow run failed:', err.message));
+    applyDuePlanChanges().catch((err) => console.error('[scheduler] plan changes failed:', err.message));
     purgeExpiredJobs().catch((err) => console.error('[scheduler] cleanup failed:', err.message));
   }, intervalMs);
   timer.unref();

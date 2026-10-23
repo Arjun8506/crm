@@ -11,7 +11,10 @@ const userSchema = new mongoose.Schema(
       theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
       // { inApp: { <type>: bool }, email: { <type>: bool } }. In-app defaults to on, email to off.
       notifications: { type: mongoose.Schema.Types.Mixed, default: {} },
+      // Anonymous product-usage events. On by default; turning it off stops all collection for this person.
+      analytics: { type: Boolean, default: true },
     },
+    seenAnnouncementsAt: Date,
     lastLoginAt: Date,
   },
   { timestamps: true },

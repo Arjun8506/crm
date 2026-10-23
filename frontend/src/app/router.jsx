@@ -17,6 +17,12 @@ import WorkflowEditorPage from '../features/automation/WorkflowEditorPage';
 import IntegrationsPage from '../features/automation/IntegrationsPage';
 import TeamPage from '../features/users/TeamPage';
 import { AccountSettingsPage, ProfilePage } from '../features/settings/SettingsPages';
+import BillingPage from '../features/billing/BillingPage';
+import TestCheckoutPage from '../features/billing/TestCheckoutPage';
+import OnboardingPage from '../features/business/OnboardingPage';
+import HelpPage from '../features/business/HelpPage';
+import WhatsNewPage from '../features/business/WhatsNewPage';
+import InsightsPage from '../features/business/InsightsPage';
 import DevelopersPage from '../features/developers/DevelopersPage';
 import PublicFormPage from '../features/publicforms/PublicFormPage';
 import PublicSharePage from '../features/publicforms/PublicSharePage';
@@ -49,6 +55,12 @@ export default function AppRoutes() {
           <Route path="/w/:workspaceId/workflows/:workflowId" element={<WorkflowEditorPage />} />
           <Route path="/settings/integrations" element={<IntegrationsPage />} />
           <Route path="/settings/developers" element={<DevelopersPage />} />
+          <Route path="/settings/billing" element={<BillingPage />} />
+          <Route path="/billing/test-checkout/:sessionId" element={<TestCheckoutPage />} />
+          <Route path="/settings/insights" element={<InsightsPage />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/help" element={<HelpPage />} />
+          <Route path="/whats-new" element={<WhatsNewPage />} />
           <Route path="/team" element={<TeamPage />} />
           <Route path="/settings/account" element={<AccountSettingsPage />} />
           <Route path="/settings/profile" element={<ProfilePage />} />

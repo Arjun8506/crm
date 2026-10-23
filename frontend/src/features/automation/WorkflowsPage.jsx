@@ -12,6 +12,7 @@ import { ConfirmDialog, EmptyState, ErrorState, PageHeader, PageTransition } fro
 import { errorMessage } from '../../services/api';
 import { useGetDataformQuery, useListDataformsQuery } from '../dataforms/dataformsApi';
 import { showToast } from '../ui/uiSlice';
+import { SuggestWorkflowButton } from '../ai/AiAssist';
 import { FieldChips } from './FormulaField';
 import { useDeleteTemplateMutation, useListTemplatesQuery, useListWorkflowsQuery, useSaveTemplateMutation, useSetWorkflowEnabledMutation } from './automationApi';
 
@@ -116,10 +117,11 @@ export default function WorkflowsPage() {
   const nameOf = (id) => dataforms.find((d) => d._id === id)?.name ?? '';
   const limited = data.length > 0 && data[0].actions === undefined; // editors only receive the manual workflows they can run
   const newButton = <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate(`/w/${workspaceId}/workflows/new`)}>New workflow</Button>;
+  const headerActions = <>{dataforms.length > 0 && <SuggestWorkflowButton workspaceId={workspaceId} dataforms={dataforms} />}{newButton}</>;
 
   return (
     <PageTransition>
-      <PageHeader title="Automation" description="Workflows react to changes and schedules, and message templates keep communication consistent." actions={tab === 'workflows' && !limited ? newButton : undefined} />
+      <PageHeader title="Automation" description="Workflows react to changes and schedules, and message templates keep communication consistent." actions={tab === 'workflows' && !limited ? headerActions : undefined} />
       <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}><Tab value="workflows" label="Workflows" /><Tab value="templates" label="Message templates" /></Tabs>
       {tab === 'templates' ? <TemplatesTab workspaceId={workspaceId} dataforms={dataforms} /> : error ? (
         error.status === 403 ? <EmptyState icon={<AutoIcon />} title="Workflows are managed by workspace admins" description="Ask an admin to set one up. Manual workflows appear as Actions on records." /> : <ErrorState message={errorMessage(error)} onRetry={refetch} />

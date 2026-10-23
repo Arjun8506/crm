@@ -170,6 +170,29 @@ Two independent projects: `frontend/` (Vite React SPA) and `backend/` (Express A
 - Export of a very large dataform is capped at 50,000 rows, and a ZIP at 1,000 files / 1 GB
 - Rate limits are per server process (in memory); running several API instances would need a shared store
 
+## Phase 7: AI, billing and business management (DONE)
+- [x] Plan definitions (Free, Team, Business) with limits and feature flags, per-account overrides, and enforcement at creation time: workspaces, records, file size, location fields, API keys and webhooks, public forms and links, AI requests. Upgrade-aware errors (HTTP 402 `PLAN_LIMIT`)
+- [x] Billing: payment-provider abstraction with a simulated test provider (development only) and a Stripe adapter (hosted checkout, signed webhooks, scheduled cancellation); checkout, scheduled downgrades with a preview of what would stop, cancel and resume, invoices, usage report, failed-payment handling; plan changes only on a verified provider event
+- [x] AI assistance behind a provider abstraction (Anthropic adapter): rewrite, summarize a record / its discussion / its changes, ask about a record, draft an email, explain an analysis from aggregated rows, suggest a workflow or a single action. Off until an admin enables it, monthly allowance per plan, per-person rate limit, timeouts and provider errors mapped to clear messages, data minimisation and a "what was sent" notice. The app is fully functional with no provider configured
+- [x] Onboarding: setup wizard (organisation, first workspace and starter dataforms) and a dismissible checklist computed from real data
+- [x] Support and feedback: help centre, contact form (stored, optionally emailed), admin inbox with status, "What's new" with unread markers, organisation announcements, NPS survey, privacy-conscious usage insights with opt-outs and deletion
+- [x] Frontend: Billing page and test checkout, AI actions (record menu, comment rewrite, email draft, analyzer explanation, workflow suggestion), onboarding wizard and checklist, Help, What's new, Feedback and insights, privacy controls on Profile, AI and analytics switches on Account
+- [x] Tests: 282 backend tests (67 new): plan limits and downgrades, signed/forged/replayed billing events, the Stripe adapter with a fake network, every AI guard, provider error and minimisation rule, workflow-draft validation, onboarding, feedback, NPS and usage privacy. Verified in Chrome, with a clearly labelled stand-in server for the AI provider
+
+### Decisions
+- Limits only gate creation, so a downgrade is safe: nothing is removed, and over-limit data simply cannot grow.
+- The simulated payment provider sends the same kind of signed event a real one does, so the real code path (verification, idempotency, activation) is what the tests and the browser exercise.
+- AI is opt-in per organisation because it sends text to a third party. Unusable output is refused rather than repaired, and a draft never becomes a saved workflow without a person saving it.
+- Usage analytics use a one-way pseudonym instead of user ids, so admins can see adoption without being able to see individuals.
+
+### Not done in Phase 7 (honest list)
+- The Stripe adapter was written from Stripe's documentation and tested with a fake network. It has not been run against a live Stripe account, there is no customer portal link, and moving between two paid plans is not supported with Stripe (cancel to Free, then upgrade). Annual billing, taxes, coupons, seats-based pricing and proration are not implemented
+- The test provider has no automatic renewals; in production nothing renews unless Stripe does it. There is no dunning (retries and reminders) beyond marking a subscription past due and notifying admins
+- AI: one provider adapter (Anthropic), no streaming, no per-user allowance, no conversation memory, no model choice in the UI, and no review of the provider's data-retention terms: that is for whoever deploys it
+- Onboarding cannot invite teammates, because invitations do not exist yet
+- Feedback goes to the organisation's admins (and an optional support email). There is no vendor-side console that collects feedback from many organisations, and announcements are per organisation
+- NPS is shown as a card after 14 days in an organisation; there is no per-segment analysis. Usage insights are counts only: no funnels or retention
+- Still missing from the original page list: password recovery, email verification, invitations and global search
+
 ## Next phases
-7. AI provider abstraction, billing, onboarding.
 8. Hardening: performance, accessibility audit, e2e (Playwright), deployment config.

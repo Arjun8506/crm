@@ -11,6 +11,7 @@ import { ConfirmDialog, EmptyState, ErrorState, PageHeader, PageTransition } fro
 import { errorMessage } from '../../services/api';
 import { selectCan } from '../auth/authSlice';
 import { setCurrentWorkspace, showToast } from '../ui/uiSlice';
+import OnboardingChecklist from '../business/OnboardingChecklist';
 import WorkspaceFormDialog from './WorkspaceFormDialog';
 import { useCloneWorkspaceMutation, useDeleteWorkspaceMutation, useListWorkspacesQuery } from './workspacesApi';
 
@@ -60,6 +61,7 @@ export default function WorkspacesPage() {
   return (
     <PageTransition>
       <PageHeader title="Workspaces" description="Organize your teams, projects and data into workspaces." actions={newButton} />
+      <OnboardingChecklist />
       {error ? <ErrorState message={errorMessage(error, 'Could not load workspaces')} onRetry={refetch} /> : (
         <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)', xl: 'repeat(4, 1fr)' } }}>
           {isLoading && Array.from({ length: 4 }, (_, i) => <Skeleton key={i} variant="rounded" height={170} />)}

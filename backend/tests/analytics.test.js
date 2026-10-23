@@ -60,7 +60,8 @@ describe('location fields and entitlements', () => {
     const gws = (await api('get', GLOBEX, '/workspaces')).body.data[0];
     const gform = (await api('post', GLOBEX, '/dataforms', { workspaceId: gws._id, name: 'Sites' })).body.dataform;
     const denied = await api('post', GLOBEX, `/dataforms/${gform._id}/fields`, { key: 'where', label: 'Where', type: 'location' });
-    assert.equal(denied.status, 403, 'free plan has no location fields');
+    assert.equal(denied.status, 402, 'free plan has no location fields');
+    assert.equal(denied.body.error.code, 'PLAN_LIMIT');
   });
 });
 

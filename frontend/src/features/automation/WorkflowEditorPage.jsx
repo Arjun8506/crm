@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Alert, Autocomplete, Box, Button, Card, Checkbox, Chip, FormControlLabel, ListSubheader, Menu, MenuItem, Skeleton, Stack, Switch, Tab, Tabs, TextField, Typography } from '@mui/material';
 import { useDispatch } from 'react-redux';
-import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import AddIcon from '@mui/icons-material/AddRounded';
 import ArrowBack from '@mui/icons-material/ArrowBackRounded';
@@ -81,7 +81,7 @@ function TriggerCard({ draft, set, locked, dataforms }) {
   );
 }
 
-function Builder({ workspaceId, workflow, initial, dataforms }) {
+function Builder({ workspaceId, workflow, initial, dataforms, fromAi }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const isNew = !workflow;
@@ -165,6 +165,7 @@ function Builder({ workspaceId, workflow, initial, dataforms }) {
           </>
         )}
       />
+      {fromAi && isNew && <Alert severity="info" sx={{ mb: 2 }}>This workflow was drafted by AI from your description. It has been checked against your real fields, but read every step before saving. It is saved switched off until you turn it on.</Alert>}
       {!isNew && <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}><Tab value="builder" label="Builder" /><Tab value="runs" label="Run history" /><Tab value="settings" label="Settings" /></Tabs>}
 
       {tab === 'runs' && <ExecutionsPanel workflowId={workflow._id} />}
@@ -229,17 +230,21 @@ function Builder({ workspaceId, workflow, initial, dataforms }) {
 export default function WorkflowEditorPage() {
   const { workspaceId, workflowId } = useParams();
   const [search] = useSearchParams();
+  const aiDraft = useLocation().state?.aiDraft;
   const isNew = !workflowId;
+  const { data: draftMeta } = useGetDataformQuery(aiDraft?.dataformId, { skip: !aiDraft });
   const { data: workflow, isLoading: loadingWf, error } = useGetWorkflowQuery(workflowId, { skip: isNew });
   const { data: dataforms = [], isLoading: loadingForms } = useListDataformsQuery({ workspaceId });
   const { data: meta } = useGetDataformQuery(workflow?.dataform, { skip: !workflow });
 
   if (error) return <EmptyState title="Workflow not found" description="It may have been deleted, or only workspace admins can open it." action={<Button component={RouterLink} to={`/w/${workspaceId}/workflows`}>Back to workflows</Button>} />;
-  if (loadingForms || (!isNew && (loadingWf || !meta))) return <Skeleton variant="rounded" height={300} />;
+  if (loadingForms || (!isNew && (loadingWf || !meta)) || (aiDraft && !draftMeta)) return <Skeleton variant="rounded" height={300} />;
   if (!dataforms.length) return <ErrorState message="Create a dataform first: workflows run on the records of a dataform." />;
 
-  const initial = isNew
+  const initial = isNew && aiDraft
+    ? { name: aiDraft.name, description: aiDraft.description ?? '', dataformId: aiDraft.dataformId, trigger: aiDraft.trigger, conditions: toDraft(aiDraft.conditions, draftMeta.fields), actions: aiDraft.actions, onError: aiDraft.onError ?? 'stop' }
+    : isNew
     ? { name: '', description: '', dataformId: search.get('dataform') ?? dataforms[0]._id, trigger: defaultTrigger('post_save'), conditions: emptyGroup(), actions: [], onError: 'stop' }
     : { name: workflow.name, description: workflow.description ?? '', dataformId: workflow.dataform, trigger: workflow.trigger, conditions: toDraft(workflow.conditions, meta.fields), actions: workflow.actions, onError: workflow.onError };
-  return <Builder key={workflow?._id ?? 'new'} workspaceId={workspaceId} workflow={workflow} initial={initial} dataforms={dataforms} />;
+  return <Builder key={workflow?._id ?? 'new'} workspaceId={workspaceId} workflow={workflow} initial={initial} dataforms={dataforms} fromAi={!!aiDraft} />;
 }

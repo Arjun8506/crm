@@ -9,6 +9,7 @@ import { ApiError, badRequest, forbidden, notFound } from '../../utils/errors.js
 import * as storage from '../../providers/storage.js';
 import { emitWorkspace } from '../../sockets/index.js';
 import { Account } from '../accounts/account.model.js';
+import { entitlementsOf } from '../billing/entitlements.js';
 import { autoFollow, followersOf, recordLabel } from '../comments/comment.service.js';
 import { loadDataform } from '../dataforms/dataform.service.js';
 import { notify } from '../notifications/notification.service.js';
@@ -31,7 +32,7 @@ async function prepareUpload(req, _res, next) {
   if (ctx.dataform.status === 'archived') throw new ApiError(409, 'CONFLICT', 'This dataform is archived and read-only');
   const { record, name } = await recordLabel(ctx.dataform, req.params.recordId);
   const account = await Account.findById(ctx.dataform.account).lean();
-  req.upload = { ...ctx, record, recordName: name, maxMb: account.entitlements?.maxUploadMb || 25 };
+  req.upload = { ...ctx, record, recordName: name, maxMb: entitlementsOf(account).maxUploadMb };
   next();
 }
 function receiveFile(req, res, next) {
@@ -46,7 +47,7 @@ recordAttachmentRouter.get('/attachments', validate({ params: recordParams }), a
   const { dataform } = await loadDataform(req);
   await recordLabel(dataform, req.params.recordId);
   const data = await Attachment.find({ account: dataform.account, record: req.params.recordId }).sort({ createdAt: -1 }).populate('uploader', 'name').lean();
-  res.json({ data, maxUploadMb: (await Account.findById(dataform.account).lean()).entitlements?.maxUploadMb || 25 });
+  res.json({ data, maxUploadMb: entitlementsOf(await Account.findById(dataform.account).lean()).maxUploadMb });
 });
 
 recordAttachmentRouter.post('/attachments', validate({ params: recordParams }), prepareUpload, receiveFile, async (req, res) => {

@@ -170,6 +170,10 @@ describe('key limits and lifecycle', () => {
   });
 
   it('is isolated per account', async () => {
+    const { Account } = await import('../src/modules/accounts/account.model.js');
+    // API keys are a paid feature. Without it the free plan is refused; a per-account override can grant it.
+    assert.equal((await user('post', GLOBEX, '/api-keys', { name: 'Globex key', scope: 'write' })).status, 402);
+    await Account.updateOne({ name: /globex/i }, { entitlementOverrides: { apiAccess: true } });
     const theirs = await user('post', GLOBEX, '/api-keys', { name: 'Globex key', scope: 'write' });
     assert.equal(theirs.status, 201);
     assert.equal((await withKey('get', theirs.body.key, `/dataforms/${deals._id}/records`)).status, 404);

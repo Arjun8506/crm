@@ -5,6 +5,7 @@ import { authenticate, humansOnly } from '../../middleware/auth.js';
 import { objectId, validate } from '../../middleware/validate.js';
 import { badRequest, notFound } from '../../utils/errors.js';
 import { audit } from '../audit/audit.js';
+import { requireFeature } from '../billing/entitlements.js';
 import { loadDataform } from '../dataforms/dataform.service.js';
 import { importable } from '../imports/import.service.js';
 import { loadFields } from '../records/record.service.js';
@@ -69,6 +70,7 @@ formAdminRouter.get('/', validate({ params: idParams }), async (req, res) => {
 
 formAdminRouter.post('/', validate({ params: idParams, body: z.object({ name: body.name, description: body.description.default(''), successMessage: body.successMessage.optional(), fields: body.fields, allowFiles: body.allowFiles.default(false), opensAt: body.opensAt.default(null), closesAt: body.closesAt.default(null), maxSubmissions: body.maxSubmissions.default(null), notifyUsers: body.notifyUsers.default([]) }) }), async (req, res) => {
   const { dataform, access } = await loadDataform(req, 'admin');
+  await requireFeature(req.auth.accountId, 'publicPages', 'Public forms and shared links');
   await check(req, dataform, access, req.body);
   const form = await PublicForm.create({ ...req.body, account: dataform.account, workspace: dataform.workspace, dataform: dataform._id, token: newToken(), createdBy: req.auth.userId });
   await audit(req, 'form.created', { type: 'form', id: form._id, summary: `${form.name} on ${dataform.name}` });
@@ -124,6 +126,7 @@ shareAdminRouter.get('/', validate({ params: shareParams }), async (req, res) =>
 
 shareAdminRouter.post('/', validate({ params: shareParams, body: z.object({ fields: z.array(z.string().max(60)).min(1, 'Choose at least one field to share').max(100), expiresInDays: z.number().int().min(1).max(90).default(7) }) }), async (req, res) => {
   const { dataform, record } = await loadRecord(req, 'editor');
+  await requireFeature(req.auth.accountId, 'publicPages', 'Public forms and shared links');
   const usable = new Set((await loadFields(dataform._id)).filter((f) => f.visibility.list && f.type !== 'relationship').map((f) => f.key));
   const bad = req.body.fields.find((k) => !usable.has(k));
   if (bad) throw badRequest(`"${bad}" cannot be shared`);
